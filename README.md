@@ -7,7 +7,7 @@ A lightweight C++ header-only implementation of **non-uniform B-spline (NUBS) tr
 ## Features
 
 - Construct non-uniform B-spline trajectories from boundary states, intermediate waypoints, and segment durations.
-- Support any system orders:
+- Support common minimum-control-effort system orders:
   - `s = 2`: minimum acceleration
   - `s = 3`: minimum jerk
   - `s = 4`: minimum snap
@@ -53,6 +53,30 @@ A(T) C = b(P).
 $$
 
 Here `A(T)` is assembled from the boundary and waypoint constraints, while `b(P)` contains the prescribed boundary states and intermediate waypoints. Since the B-spline basis has local support, this system is banded.
+
+## Smaller Forward Construction System
+
+For a trajectory with `M` segments and system order `s`, NUBSTrajectory solves for
+
+$$
+N_c = M + 2s - 1
+$$
+
+B-spline control points per dimension.
+
+In a MINCO-style piecewise polynomial construction, each segment has `2s` polynomial coefficients per dimension, so the forward linear system size is
+
+$$
+2Ms.
+$$
+
+Therefore, for the same `M` and `s`, the NUBS forward construction system is smaller:
+
+$$
+M + 2s - 1 \quad \text{vs.} \quad 2Ms.
+$$
+
+This is one practical reason to use the B-spline representation: the external trajectory still satisfies the same boundary and waypoint constraints, while the forward construction solves a lower-dimensional banded system.
 
 ## Why It Is Equivalent to MINCO
 
