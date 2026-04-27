@@ -7,7 +7,7 @@ A lightweight C++ header-only implementation of **non-uniform B-spline (NUBS) tr
 ## Features
 
 - Construct non-uniform B-spline trajectories from boundary states, intermediate waypoints, and segment durations.
-- Support system orders:
+- Support any system orders:
   - `s = 2`: minimum acceleration
   - `s = 3`: minimum jerk
   - `s = 4`: minimum snap
