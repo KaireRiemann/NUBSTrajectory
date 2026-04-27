@@ -113,6 +113,53 @@ nubs::SepticNUBS<3> septic;   // NUBSTrajectoryT<3, 4>
 
 The fixed-order implementation uses compile-time Gauss rules, fixed-degree basis kernels, and fixed-degree matrix assembly for construction and gradient propagation. The default optimization path uses centered finite-difference time gradients with local affected-span and affected-row reduction. The analytic time-gradient path is kept mainly for validation.
 
+## Usage Example
+
+```cpp
+#include "NUBSTrajectory.hpp"
+
+#include <Eigen/Dense>
+
+int main()
+{
+    constexpr int Dim = 3;
+    constexpr int S = 3; // minimum jerk, degree p = 5
+
+    nubs::NUBSTrajectoryT<Dim, S> traj;
+
+    Eigen::MatrixXd headState(Dim, S);
+    Eigen::MatrixXd tailState(Dim, S);
+
+    // columns: position, velocity, acceleration
+    headState.col(0) = Eigen::Vector3d(0.0, 0.0, 0.0);
+    headState.col(1) = Eigen::Vector3d(0.0, 0.0, 0.0);
+    headState.col(2) = Eigen::Vector3d(0.0, 0.0, 0.0);
+
+    tailState.col(0) = Eigen::Vector3d(5.0, 3.0, 1.0);
+    tailState.col(1) = Eigen::Vector3d(0.0, 0.0, 0.0);
+    tailState.col(2) = Eigen::Vector3d(0.0, 0.0, 0.0);
+
+    Eigen::MatrixXd P_inner(2, Dim);
+    P_inner.row(0) = Eigen::RowVector3d(1.5, 1.0, 0.5);
+    P_inner.row(1) = Eigen::RowVector3d(3.5, 2.5, 0.8);
+
+    Eigen::VectorXd T(3);
+    T << 1.0, 1.2, 1.0;
+
+    Eigen::MatrixXd control_points;
+    traj.generate(P_inner, headState, tailState, T, control_points);
+
+    const double t = 1.5;
+    Eigen::Vector3d pos = traj.evaluate(t, 0);
+    Eigen::Vector3d vel = traj.evaluate(t, 1);
+    Eigen::Vector3d acc = traj.evaluate(t, 2);
+    Eigen::Vector3d jerk = traj.evaluate(t, 3);
+    double energy = traj.getEnergy();
+
+    return 0;
+}
+```
+
 ## Tests
 
 Tests are split into separate executables under `src/`.
@@ -120,6 +167,7 @@ Tests are split into separate executables under `src/`.
 Main groups:
 
 - Basic construction checks for `s = 2, 3, 4`
+- Minimal API usage smoke test
 - MINCO trajectory and energy comparisons
 - MINCO energy-gradient propagation comparisons
 - Centered finite-difference gradient checks

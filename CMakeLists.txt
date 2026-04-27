@@ -28,6 +28,7 @@ endfunction()
 add_nubs_test(test_basic_s2_d2 src/test_basic_s2_d2.cpp)
 add_nubs_test(test_basic_s3_d3 src/test_basic_s3_d3.cpp)
 add_nubs_test(test_basic_s4_d3 src/test_basic_s4_d3.cpp)
+add_nubs_test(test_usage_example src/test_usage_example.cpp)
 
 add_nubs_test(test_minco_s2_3d src/test_minco_s2_3d.cpp)
 add_nubs_test(test_minco_s3_3d src/test_minco_s3_3d.cpp)
