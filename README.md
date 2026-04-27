@@ -111,9 +111,6 @@ cmake -S . -B build
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
-
-Executables are written to `bin/`. Build files are written to `build/`. Both directories are ignored by git.
-
 ## Repository Layout
 
 - `include/NUBSTrajectory.hpp`: main implementation
