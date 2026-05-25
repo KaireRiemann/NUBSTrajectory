@@ -203,6 +203,26 @@ inline void checkGenericSpecializedOne(const unsigned int seed)
                       "generic vs fixed point gradient");
     requireMatrixNear(fixed_gt, generic_gt, 2.0e-5, 2.0e-5,
                       "generic vs fixed time gradient");
+
+    double generic_fixed_ratio_cost = 0.0;
+    double fixed_fixed_ratio_cost = 0.0;
+    Eigen::MatrixXd generic_fixed_ratio_gp;
+    Eigen::MatrixXd fixed_fixed_ratio_gp;
+    double generic_gtotal = 0.0;
+    double fixed_gtotal = 0.0;
+    generic.getEnergyAndFixedRatioGrad(generic_fixed_ratio_cost,
+                                       generic_fixed_ratio_gp,
+                                       generic_gtotal);
+    fixed.getEnergyAndFixedRatioGrad(fixed_fixed_ratio_cost,
+                                     fixed_fixed_ratio_gp,
+                                     fixed_gtotal);
+    requireNear(fixed_fixed_ratio_cost, generic_fixed_ratio_cost,
+                2.0e-9, 2.0e-9, "generic vs fixed fixed-ratio cost");
+    requireMatrixNear(fixed_fixed_ratio_gp, generic_fixed_ratio_gp,
+                      5.0e-7, 5.0e-7,
+                      "generic vs fixed fixed-ratio point gradient");
+    requireNear(fixed_gtotal, generic_gtotal, 2.0e-5, 2.0e-5,
+                "generic vs fixed total-duration gradient");
 }
 
 inline void runGenericSpecializedEquivalenceCase()
@@ -297,6 +317,268 @@ inline void runExternalGradientCase()
     checkExternalGradientOne<1, 4>(3401);
     checkExternalGradientOne<2, 4>(3402);
     checkExternalGradientOne<3, 4>(3403);
+    std::cout << "  PASS" << std::endl;
+}
+
+inline void externalTotalDurationDeltas(const Eigen::VectorXd &ratios,
+                                        const double total_duration,
+                                        double &plus_delta,
+                                        double &minus_delta)
+{
+    double h = 1.0e-6 * std::max(1.0, std::abs(total_duration));
+    h = std::min(h, 0.25 * total_duration);
+    plus_delta = h > 0.0 ? h : 1.0e-8;
+
+    const double ratio_sum = ratios.sum();
+    double min_allowed_total = 1.0e-8;
+    for (int i = 0; i < ratios.size(); ++i)
+    {
+        const double normalized_ratio = ratios(i) / ratio_sum;
+        min_allowed_total =
+            std::max(min_allowed_total, 1.0e-8 / normalized_ratio);
+    }
+
+    const double allowed_minus =
+        std::max(0.0, total_duration - min_allowed_total);
+    const double h_minus = std::min(plus_delta, allowed_minus);
+    minus_delta = h_minus > 0.0 ? -h_minus : 0.0;
+}
+
+template <int Dim, int S>
+inline double fixedRatioEnergy(
+    const Eigen::Matrix<double, Eigen::Dynamic, Dim> &inner_points,
+    const Eigen::Matrix<double, Dim, Eigen::Dynamic> &head_state,
+    const Eigen::Matrix<double, Dim, Eigen::Dynamic> &tail_state,
+    const Eigen::VectorXd &ratios,
+    const double total_duration)
+{
+    const Eigen::VectorXd durations =
+        nubs::NUBSTrajectoryT<Dim, S>::durationsFromRatios(ratios,
+                                                           total_duration);
+    return energyForFixed<Dim, S>(inner_points, head_state, tail_state,
+                                  durations);
+}
+
+template <int Dim, int S>
+inline void checkFixedRatioTotalDurationOne(const unsigned int seed)
+{
+    constexpr int M = 5;
+    const auto data = makeRandomProblem<Dim>(S, M, seed);
+    const double total_duration = data.durations.sum();
+    const Eigen::VectorXd ratios = 2.5 * data.durations;
+
+    nubs::NUBSTrajectoryT<Dim, S> trajectory;
+    Eigen::MatrixXd control_points;
+    trajectory.generateWithTotalDuration(data.inner_points, data.head_state,
+                                         data.tail_state, ratios,
+                                         total_duration, control_points);
+
+    double fixed_ratio_cost = 0.0;
+    Eigen::MatrixXd fixed_ratio_gp;
+    double fixed_ratio_gtotal = 0.0;
+    trajectory.getEnergyAndFixedRatioGrad(fixed_ratio_cost, fixed_ratio_gp,
+                                          fixed_ratio_gtotal);
+
+    double segment_cost = 0.0;
+    Eigen::MatrixXd segment_gp;
+    Eigen::VectorXd segment_gt;
+    trajectory.getEnergyAndFiniteDiffGrad(segment_cost, segment_gp,
+                                          segment_gt);
+
+    const Eigen::VectorXd normalized_ratios =
+        trajectory.getDurations() / trajectory.getTotalDuration();
+    const double contracted_time_grad = normalized_ratios.dot(segment_gt);
+
+    requireNear(fixed_ratio_cost, segment_cost, 2.0e-9, 2.0e-9,
+                "fixed-ratio cost");
+    requireMatrixNear(fixed_ratio_gp, segment_gp, 5.0e-7, 5.0e-7,
+                      "fixed-ratio point gradient");
+    requireNear(fixed_ratio_gtotal, contracted_time_grad,
+                2.0e-4, 2.0e-5, "fixed-ratio contracted time gradient");
+
+    double plus_delta = 0.0;
+    double minus_delta = 0.0;
+    externalTotalDurationDeltas(ratios, total_duration,
+                                plus_delta, minus_delta);
+    const double plus_cost =
+        fixedRatioEnergy<Dim, S>(data.inner_points, data.head_state,
+                                 data.tail_state, ratios,
+                                 total_duration + plus_delta);
+    const double minus_cost =
+        fixedRatioEnergy<Dim, S>(data.inner_points, data.head_state,
+                                 data.tail_state, ratios,
+                                 total_duration + minus_delta);
+    const double numeric_gtotal =
+        (plus_cost - minus_cost) / (plus_delta - minus_delta);
+
+    requireNear(fixed_ratio_gtotal, numeric_gtotal,
+                3.0e-3, 5.0e-4, "fixed-ratio total-duration gradient");
+}
+
+inline void runFixedRatioTotalDurationCase()
+{
+    std::cout << "[fixed-ratio total-duration gradient]" << std::endl;
+    checkFixedRatioTotalDurationOne<1, 2>(5201);
+    checkFixedRatioTotalDurationOne<2, 2>(5202);
+    checkFixedRatioTotalDurationOne<3, 2>(5203);
+    checkFixedRatioTotalDurationOne<1, 3>(5301);
+    checkFixedRatioTotalDurationOne<2, 3>(5302);
+    checkFixedRatioTotalDurationOne<3, 3>(5303);
+    checkFixedRatioTotalDurationOne<1, 4>(5401);
+    checkFixedRatioTotalDurationOne<2, 4>(5402);
+    checkFixedRatioTotalDurationOne<3, 4>(5403);
+    std::cout << "  PASS" << std::endl;
+}
+
+template <int Dim, int S>
+inline double uniformTimeEnergy(
+    const Eigen::Matrix<double, Eigen::Dynamic, Dim> &inner_points,
+    const Eigen::Matrix<double, Dim, Eigen::Dynamic> &head_state,
+    const Eigen::Matrix<double, Dim, Eigen::Dynamic> &tail_state,
+    const double total_duration)
+{
+    nubs::UniformNUBSTrajectoryT<Dim, S> trajectory;
+    Eigen::MatrixXd control_points;
+    trajectory.generateUniform(inner_points, head_state, tail_state,
+                               total_duration, control_points);
+    return trajectory.getEnergy();
+}
+
+template <int Dim, int S>
+inline void checkUniformTimeOne(const unsigned int seed)
+{
+    constexpr int M = 5;
+    const auto data = makeRandomProblem<Dim>(S, M, seed);
+    const double total_duration = data.durations.sum();
+    const Eigen::VectorXd uniform_durations =
+        nubs::UniformNUBSTrajectoryT<Dim, S>::uniformDurations(M,
+                                                               total_duration);
+
+    nubs::UniformNUBSTrajectoryT<Dim, S> uniform;
+    Eigen::MatrixXd uniform_control;
+    uniform.generateUniform(data.inner_points, data.head_state,
+                            data.tail_state, total_duration,
+                            uniform_control);
+
+    nubs::NUBSTrajectoryT<Dim, S> reference;
+    Eigen::MatrixXd reference_control;
+    reference.generate(data.inner_points, data.head_state, data.tail_state,
+                       uniform_durations, reference_control);
+
+    nubs::UniformNUBSTrajectory<Dim, 2 * S - 1> generic(S);
+    Eigen::MatrixXd generic_control;
+    generic.generateUniform(data.inner_points, data.head_state,
+                            data.tail_state, total_duration,
+                            generic_control);
+
+    requireMatrixNear(uniform.getDurations(), uniform_durations,
+                      1.0e-12, 1.0e-12, "uniform durations");
+    requireMatrixNear(uniform_control, reference_control,
+                      2.0e-10, 2.0e-10, "uniform fixed control");
+    requireMatrixNear(generic_control, uniform_control,
+                      2.0e-10, 2.0e-10, "uniform generic control");
+    requireNear(uniform.getEnergy(), reference.getEnergy(),
+                2.0e-9, 2.0e-9, "uniform fixed energy");
+    requireNear(generic.getEnergy(), uniform.getEnergy(),
+                2.0e-9, 2.0e-9, "uniform generic energy");
+
+    const double dt = total_duration / static_cast<double>(M);
+    for (int i = 1; i < M; ++i)
+    {
+        const auto value = uniform.evaluate(dt * static_cast<double>(i), 0);
+        const Eigen::Matrix<double, Dim, 1> expected =
+            data.inner_points.row(i - 1).transpose();
+        requireMatrixNear(value, expected, 1.0e-7, 1.0e-7,
+                          "uniform waypoint");
+    }
+
+    double uniform_cost = 0.0;
+    Eigen::MatrixXd uniform_gp;
+    double uniform_gtotal = 0.0;
+    uniform.getEnergyAndUniformTimeGrad(uniform_cost, uniform_gp,
+                                        uniform_gtotal);
+
+    double segment_cost = 0.0;
+    Eigen::MatrixXd segment_gp;
+    Eigen::VectorXd segment_gt;
+    uniform.getEnergyAndFiniteDiffGrad(segment_cost, segment_gp,
+                                       segment_gt);
+
+    requireNear(uniform_cost, segment_cost, 2.0e-9, 2.0e-9,
+                "uniform gradient cost");
+    requireMatrixNear(uniform_gp, segment_gp, 5.0e-7, 5.0e-7,
+                      "uniform point gradient");
+    requireNear(uniform_gtotal, segment_gt.sum() / static_cast<double>(M),
+                2.0e-4, 2.0e-5, "uniform contracted time gradient");
+
+    double generic_cost = 0.0;
+    Eigen::MatrixXd generic_gp;
+    double generic_gtotal = 0.0;
+    generic.getEnergyAndUniformTimeGrad(generic_cost, generic_gp,
+                                        generic_gtotal);
+    requireNear(generic_cost, uniform_cost, 2.0e-9, 2.0e-9,
+                "uniform generic gradient cost");
+    requireMatrixNear(generic_gp, uniform_gp, 5.0e-7, 5.0e-7,
+                      "uniform generic point gradient");
+    requireNear(generic_gtotal, uniform_gtotal, 2.0e-5, 2.0e-5,
+                "uniform generic total-duration gradient");
+
+    Eigen::Matrix<double, Eigen::Dynamic, Dim> numeric_gp =
+        Eigen::Matrix<double, Eigen::Dynamic, Dim>::Zero(M - 1, Dim);
+    const double point_eps = 1.0e-6;
+    for (int r = 0; r < data.inner_points.rows(); ++r)
+    {
+        for (int c = 0; c < Dim; ++c)
+        {
+            auto plus_points = data.inner_points;
+            auto minus_points = data.inner_points;
+            plus_points(r, c) += point_eps;
+            minus_points(r, c) -= point_eps;
+            const double plus_cost =
+                uniformTimeEnergy<Dim, S>(plus_points, data.head_state,
+                                          data.tail_state, total_duration);
+            const double minus_cost =
+                uniformTimeEnergy<Dim, S>(minus_points, data.head_state,
+                                          data.tail_state, total_duration);
+            numeric_gp(r, c) =
+                (plus_cost - minus_cost) / (2.0 * point_eps);
+        }
+    }
+
+    Eigen::VectorXd ones = Eigen::VectorXd::Ones(M);
+    double plus_delta = 0.0;
+    double minus_delta = 0.0;
+    externalTotalDurationDeltas(ones, total_duration,
+                                plus_delta, minus_delta);
+    const double plus_cost =
+        uniformTimeEnergy<Dim, S>(data.inner_points, data.head_state,
+                                  data.tail_state,
+                                  total_duration + plus_delta);
+    const double minus_cost =
+        uniformTimeEnergy<Dim, S>(data.inner_points, data.head_state,
+                                  data.tail_state,
+                                  total_duration + minus_delta);
+    const double numeric_gtotal =
+        (plus_cost - minus_cost) / (plus_delta - minus_delta);
+
+    requireMatrixNear(uniform_gp, numeric_gp, 5.0e-4, 2.0e-4,
+                      "uniform external point gradient");
+    requireNear(uniform_gtotal, numeric_gtotal,
+                3.0e-3, 5.0e-4, "uniform external total-duration gradient");
+}
+
+inline void runUniformTimeCase()
+{
+    std::cout << "[uniform-time NUBS]" << std::endl;
+    checkUniformTimeOne<1, 2>(6201);
+    checkUniformTimeOne<2, 2>(6202);
+    checkUniformTimeOne<3, 2>(6203);
+    checkUniformTimeOne<1, 3>(6301);
+    checkUniformTimeOne<2, 3>(6302);
+    checkUniformTimeOne<3, 3>(6303);
+    checkUniformTimeOne<1, 4>(6401);
+    checkUniformTimeOne<2, 4>(6402);
+    checkUniformTimeOne<3, 4>(6403);
     std::cout << "  PASS" << std::endl;
 }
 

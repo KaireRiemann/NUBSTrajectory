@@ -526,6 +526,47 @@ protected:
         }
     }
 
+    inline void finiteDiffDeltasForFixedRatioTotalDuration(double &plus_delta,
+                                                           double &minus_delta) const
+    {
+        const double total_duration = getTotalDuration();
+        if (!std::isfinite(total_duration) || total_duration <= min_duration)
+        {
+            throw std::runtime_error(
+                "NUBSTrajectory::getEnergyAndFixedRatioGrad(): total duration must be finite and positive.");
+        }
+
+        const double h = finiteDiffStepForDuration(total_duration);
+        plus_delta = h;
+
+        double min_allowed_total = min_duration;
+        for (int i = 0; i < durations_.size(); ++i)
+        {
+            const double ratio = durations_(i) / total_duration;
+            min_allowed_total =
+                std::max(min_allowed_total, min_duration / ratio);
+        }
+
+        const double allowed_minus =
+            std::max(0.0, total_duration - min_allowed_total);
+        const double h_minus = std::min(h, allowed_minus);
+        minus_delta = h_minus > 0.0 ? -h_minus : 0.0;
+    }
+
+    inline void scaleKnotsForTotalDurationDelta(const double delta,
+                                                Eigen::VectorXd &u_vec) const
+    {
+        const double total_duration = getTotalDuration();
+        const double new_total_duration = total_duration + delta;
+        if (!std::isfinite(new_total_duration) ||
+            new_total_duration <= min_duration)
+        {
+            throw std::runtime_error(
+                "NUBSTrajectory::getEnergyAndFixedRatioGrad(): perturbed total duration is invalid.");
+        }
+        u_vec = knots * (new_total_duration / total_duration);
+    }
+
     inline bool isKnotShiftedByDuration(const int knot_idx,
                                         const int duration_idx) const
     {
@@ -880,6 +921,65 @@ public:
         return u;
     }
 
+    static inline Eigen::VectorXd durationsFromRatios(
+        const Eigen::VectorXd &duration_ratios,
+        const double total_duration)
+    {
+        if (duration_ratios.size() <= 0)
+        {
+            throw std::runtime_error(
+                "NUBSTrajectory::durationsFromRatios(): duration_ratios.size() must be positive.");
+        }
+        if (!std::isfinite(total_duration) || total_duration <= min_duration)
+        {
+            throw std::runtime_error(
+                "NUBSTrajectory::durationsFromRatios(): total_duration must be finite and greater than 1e-8.");
+        }
+
+        double ratio_sum = 0.0;
+        for (int i = 0; i < duration_ratios.size(); ++i)
+        {
+            if (!std::isfinite(duration_ratios(i)) ||
+                duration_ratios(i) <= 0.0)
+            {
+                throw std::runtime_error(
+                    "NUBSTrajectory::durationsFromRatios(): all ratios must be finite and positive.");
+            }
+            ratio_sum += duration_ratios(i);
+        }
+        if (!std::isfinite(ratio_sum) || ratio_sum <= 0.0)
+        {
+            throw std::runtime_error(
+                "NUBSTrajectory::durationsFromRatios(): ratio sum must be finite and positive.");
+        }
+
+        Eigen::VectorXd durations =
+            duration_ratios * (total_duration / ratio_sum);
+        for (int i = 0; i < durations.size(); ++i)
+        {
+            if (!std::isfinite(durations(i)) ||
+                durations(i) <= min_duration)
+            {
+                throw std::runtime_error(
+                    "NUBSTrajectory::durationsFromRatios(): allocated duration is not greater than 1e-8.");
+            }
+        }
+        return durations;
+    }
+
+    static inline Eigen::VectorXd uniformDurations(
+        const int piece_num,
+        const double total_duration)
+    {
+        if (piece_num <= 0)
+        {
+            throw std::runtime_error(
+                "NUBSTrajectory::uniformDurations(): piece_num must be positive.");
+        }
+        return durationsFromRatios(Eigen::VectorXd::Ones(piece_num),
+                                   total_duration);
+    }
+
     inline void generate(const Eigen::MatrixXd &P_inner,
                          const Eigen::MatrixXd &headState,
                          const Eigen::MatrixXd &tailState,
@@ -915,6 +1015,40 @@ public:
         A.solve(b);
         P_full = b;
         control_points = P_full;
+    }
+
+    inline void generateWithTotalDuration(const Eigen::MatrixXd &P_inner,
+                                          const Eigen::MatrixXd &headState,
+                                          const Eigen::MatrixXd &tailState,
+                                          const Eigen::VectorXd &duration_ratios,
+                                          const double total_duration,
+                                          Eigen::MatrixXd &P_full)
+    {
+        const Eigen::VectorXd T =
+            durationsFromRatios(duration_ratios, total_duration);
+        generate(P_inner, headState, tailState, T, P_full);
+    }
+
+    inline void generateFixedRatio(const Eigen::MatrixXd &P_inner,
+                                   const Eigen::MatrixXd &headState,
+                                   const Eigen::MatrixXd &tailState,
+                                   const Eigen::VectorXd &duration_ratios,
+                                   const double total_duration,
+                                   Eigen::MatrixXd &P_full)
+    {
+        generateWithTotalDuration(P_inner, headState, tailState,
+                                  duration_ratios, total_duration, P_full);
+    }
+
+    inline void generateUniform(const Eigen::MatrixXd &P_inner,
+                                const Eigen::MatrixXd &headState,
+                                const Eigen::MatrixXd &tailState,
+                                const double total_duration,
+                                Eigen::MatrixXd &P_full)
+    {
+        const int M = static_cast<int>(P_inner.rows()) + 1;
+        generate(P_inner, headState, tailState,
+                 uniformDurations(M, total_duration), P_full);
     }
 
     inline Eigen::Matrix<double, Dim, 1> evaluate(double t,
@@ -1357,6 +1491,47 @@ public:
 #endif
     }
 
+    inline void propagateEnergyGradFixedRatioFiniteDiff(
+        const Eigen::MatrixXd &gdC,
+        Eigen::MatrixXd &gradByPoints,
+        double &gradByTotalDuration) const
+    {
+        const int M = static_cast<int>(durations_.size());
+        gradByPoints.resize(std::max(0, M - 1), Dim);
+
+        Eigen::MatrixXd adjGrad = gdC;
+        A.solveAdj(adjGrad);
+        for (int i = 0; i < M - 1; ++i)
+        {
+            gradByPoints.row(i) = adjGrad.row(s + i);
+        }
+
+        double plus_delta = 0.0;
+        double minus_delta = 0.0;
+        finiteDiffDeltasForFixedRatioTotalDuration(plus_delta, minus_delta);
+        const double denom = plus_delta - minus_delta;
+
+        Eigen::VectorXd u_plus;
+        Eigen::VectorXd u_minus;
+        scaleKnotsForTotalDurationDelta(plus_delta, u_plus);
+        scaleKnotsForTotalDurationDelta(minus_delta, u_minus);
+
+        const double cost_p = getEnergyForKnots(u_plus);
+        const double cost_m = getEnergyForKnots(u_minus);
+
+        BandedSystem A_plus;
+        BandedSystem A_minus;
+        buildSystemMatrixA(M, u_plus, A_plus);
+        buildSystemMatrixA(M, u_minus, A_minus);
+        const double plus_adj =
+            A_plus.dotMultiply(control_points, adjGrad);
+        const double minus_adj =
+            A_minus.dotMultiply(control_points, adjGrad);
+
+        gradByTotalDuration =
+            (cost_p - cost_m - plus_adj + minus_adj) / denom;
+    }
+
     inline void getEnergyAndAnalyticGrad(double &cost,
                                          Eigen::MatrixXd &gradByPoints,
                                          Eigen::VectorXd &gradByTimes) const
@@ -1386,6 +1561,30 @@ public:
         Eigen::MatrixXd gdC;
         getEnergyPartialGradByCoeffs(cost, gdC);
         propagateEnergyGradFiniteDiffFull(gdC, durations_, gradByPoints, gradByTimes);
+    }
+
+    inline void getEnergyAndFixedRatioGrad(double &cost,
+                                           Eigen::MatrixXd &gradByPoints,
+                                           double &gradByTotalDuration) const
+    {
+        Eigen::MatrixXd gdC;
+        getEnergyPartialGradByCoeffs(cost, gdC);
+        propagateEnergyGradFixedRatioFiniteDiff(gdC, gradByPoints,
+                                                gradByTotalDuration);
+    }
+
+    inline void getEnergyAndTotalDurationGrad(double &cost,
+                                              Eigen::MatrixXd &gradByPoints,
+                                              double &gradByTotalDuration) const
+    {
+        getEnergyAndFixedRatioGrad(cost, gradByPoints, gradByTotalDuration);
+    }
+
+    inline void getEnergyAndUniformTimeGrad(double &cost,
+                                            Eigen::MatrixXd &gradByPoints,
+                                            double &gradByTotalDuration) const
+    {
+        getEnergyAndFixedRatioGrad(cost, gradByPoints, gradByTotalDuration);
     }
 };
 
@@ -1424,7 +1623,7 @@ struct FixedGaussRule<4>
 };
 
 template <int Dim, int S>
-class NUBSTrajectoryT final : public NUBSTrajectory<Dim, 2 * S - 1>
+class NUBSTrajectoryT : public NUBSTrajectory<Dim, 2 * S - 1>
 {
     static_assert(S >= 2 && S <= 4,
                   "NUBSTrajectoryT currently supports S = 2, 3, and 4.");
@@ -1809,6 +2008,40 @@ public:
         this->A.solve(b);
         P_full = b;
         this->control_points = P_full;
+    }
+
+    inline void generateWithTotalDuration(const Eigen::MatrixXd &P_inner,
+                                          const Eigen::MatrixXd &headState,
+                                          const Eigen::MatrixXd &tailState,
+                                          const Eigen::VectorXd &duration_ratios,
+                                          const double total_duration,
+                                          Eigen::MatrixXd &P_full)
+    {
+        const Eigen::VectorXd T =
+            this->durationsFromRatios(duration_ratios, total_duration);
+        generate(P_inner, headState, tailState, T, P_full);
+    }
+
+    inline void generateFixedRatio(const Eigen::MatrixXd &P_inner,
+                                   const Eigen::MatrixXd &headState,
+                                   const Eigen::MatrixXd &tailState,
+                                   const Eigen::VectorXd &duration_ratios,
+                                   const double total_duration,
+                                   Eigen::MatrixXd &P_full)
+    {
+        generateWithTotalDuration(P_inner, headState, tailState,
+                                  duration_ratios, total_duration, P_full);
+    }
+
+    inline void generateUniform(const Eigen::MatrixXd &P_inner,
+                                const Eigen::MatrixXd &headState,
+                                const Eigen::MatrixXd &tailState,
+                                const double total_duration,
+                                Eigen::MatrixXd &P_full)
+    {
+        const int M = static_cast<int>(P_inner.rows()) + 1;
+        generate(P_inner, headState, tailState,
+                 this->uniformDurations(M, total_duration), P_full);
     }
 
     inline Eigen::Matrix<double, Dim, 1> evaluate(double t,
@@ -2263,6 +2496,48 @@ public:
 #endif
     }
 
+    inline void propagateEnergyGradFixedRatioFiniteDiff(
+        const Eigen::MatrixXd &gdC,
+        Eigen::MatrixXd &gradByPoints,
+        double &gradByTotalDuration) const
+    {
+        const int M = static_cast<int>(this->durations_.size());
+        gradByPoints.resize(std::max(0, M - 1), Dim);
+
+        Eigen::MatrixXd adjGrad = gdC;
+        this->A.solveAdj(adjGrad);
+        for (int i = 0; i < M - 1; ++i)
+        {
+            gradByPoints.row(i) = adjGrad.row(S + i);
+        }
+
+        double plus_delta = 0.0;
+        double minus_delta = 0.0;
+        this->finiteDiffDeltasForFixedRatioTotalDuration(plus_delta,
+                                                         minus_delta);
+        const double denom = plus_delta - minus_delta;
+
+        Eigen::VectorXd u_plus;
+        Eigen::VectorXd u_minus;
+        this->scaleKnotsForTotalDurationDelta(plus_delta, u_plus);
+        this->scaleKnotsForTotalDurationDelta(minus_delta, u_minus);
+
+        const double cost_p = getEnergyForKnots(u_plus);
+        const double cost_m = getEnergyForKnots(u_minus);
+
+        BandedSystem A_plus;
+        BandedSystem A_minus;
+        buildSystemMatrixFixed(M, u_plus, A_plus);
+        buildSystemMatrixFixed(M, u_minus, A_minus);
+        const double plus_adj =
+            A_plus.dotMultiply(this->control_points, adjGrad);
+        const double minus_adj =
+            A_minus.dotMultiply(this->control_points, adjGrad);
+
+        gradByTotalDuration =
+            (cost_p - cost_m - plus_adj + minus_adj) / denom;
+    }
+
     inline void getEnergyAndAnalyticGrad(double &cost,
                                          Eigen::MatrixXd &gradByPoints,
                                          Eigen::VectorXd &gradByTimes) const
@@ -2295,6 +2570,530 @@ public:
         propagateEnergyGradFiniteDiffFull(gdC, this->durations_,
                                           gradByPoints, gradByTimes);
     }
+
+    inline void getEnergyAndFixedRatioGrad(double &cost,
+                                           Eigen::MatrixXd &gradByPoints,
+                                           double &gradByTotalDuration) const
+    {
+        Eigen::MatrixXd gdC;
+        getEnergyPartialGradByCoeffs(cost, gdC);
+        propagateEnergyGradFixedRatioFiniteDiff(gdC, gradByPoints,
+                                                gradByTotalDuration);
+    }
+
+    inline void getEnergyAndTotalDurationGrad(double &cost,
+                                              Eigen::MatrixXd &gradByPoints,
+                                              double &gradByTotalDuration) const
+    {
+        getEnergyAndFixedRatioGrad(cost, gradByPoints, gradByTotalDuration);
+    }
+
+    inline void getEnergyAndUniformTimeGrad(double &cost,
+                                            Eigen::MatrixXd &gradByPoints,
+                                            double &gradByTotalDuration) const
+    {
+        getEnergyAndFixedRatioGrad(cost, gradByPoints, gradByTotalDuration);
+    }
+};
+
+template <int Dim, int S>
+class UniformNUBSTrajectoryT final : public NUBSTrajectoryT<Dim, S>
+{
+    static_assert(S >= 2 && S <= 4,
+                  "UniformNUBSTrajectoryT currently supports S = 2, 3, and 4.");
+
+private:
+    using Parent = NUBSTrajectoryT<Dim, S>;
+    static constexpr int P = 2 * S - 1;
+
+    mutable bool fullSystemFactorized_ = false;
+    mutable Eigen::Matrix<double, Eigen::Dynamic, Dim> uniformInnerPoints_;
+    mutable Eigen::Matrix<double, Dim, S> uniformHeadState_;
+    mutable Eigen::Matrix<double, Dim, S> uniformTailState_;
+    mutable bool uniformProblemCached_ = false;
+    mutable std::vector<Eigen::Matrix<double, P + 1, Dim>> uniformPolyCoeffs_;
+    mutable bool uniformPolyCacheValid_ = false;
+
+    struct BoundaryInverseCache
+    {
+        Eigen::Matrix<double, S, S> headInv;
+        Eigen::Matrix<double, S, S> tailInv;
+    };
+
+    inline const BandedSystem &reducedMatrixForPieceNum(const int M) const
+    {
+        static std::map<int, BandedSystem> cache;
+        const auto iter = cache.find(M);
+        if (iter != cache.end())
+        {
+            return iter->second;
+        }
+
+        const int n = M - 1;
+        BandedSystem reducedA;
+        reducedA.create(n, S - 1, S);
+        if (n > 0)
+        {
+            const int nc = this->getCtrlPtNum(M);
+            const Eigen::VectorXd unitT = Eigen::VectorXd::Ones(M);
+            const Eigen::VectorXd unitKnots = this->generateKnots(unitT, nc);
+            Eigen::Matrix<double, P + 1, P + 1> ders;
+
+            for (int i = 1; i < M; ++i)
+            {
+                const int row = i - 1;
+                const int span = P + i;
+                this->dersBasisFuns(0, span, unitKnots(span),
+                                    unitKnots, ders);
+                for (int j = 0; j <= P; ++j)
+                {
+                    const int gidx = span - P + j;
+                    if (gidx >= S && gidx < nc - S)
+                    {
+                        reducedA(row, gidx - S) = ders(0, j);
+                    }
+                }
+            }
+            reducedA.factorizeLU();
+        }
+
+        const auto inserted = cache.emplace(M, std::move(reducedA));
+        return inserted.first->second;
+    }
+
+    inline const BoundaryInverseCache &boundaryInverseForPieceNum(const int M) const
+    {
+        static std::map<int, BoundaryInverseCache> cache;
+        const auto iter = cache.find(M);
+        if (iter != cache.end())
+        {
+            return iter->second;
+        }
+
+        const int nc = this->getCtrlPtNum(M);
+        const Eigen::VectorXd unitT = Eigen::VectorXd::Ones(M);
+        const Eigen::VectorXd unitKnots = this->generateKnots(unitT, nc);
+        Eigen::Matrix<double, P + 1, P + 1> ders;
+        Eigen::Matrix<double, S, S> mat;
+        BoundaryInverseCache value;
+
+        mat.setZero();
+        for (int d = 0; d < S; ++d)
+        {
+            this->dersBasisFuns(d, P, unitKnots(P), unitKnots, ders);
+            for (int j = 0; j < S; ++j)
+            {
+                mat(d, j) = ders(d, j);
+            }
+        }
+        value.headInv = mat.inverse();
+
+        mat.setZero();
+        const int firstLocalCol = nc - 1 - P;
+        for (int d = 0; d < S; ++d)
+        {
+            this->dersBasisFuns(d, nc - 1, unitKnots(nc), unitKnots, ders);
+            for (int j = 0; j < S; ++j)
+            {
+                const int gidx = nc - S + j;
+                mat(d, j) = ders(d, gidx - firstLocalCol);
+            }
+        }
+        value.tailInv = mat.inverse();
+
+        const auto inserted = cache.emplace(M, value);
+        return inserted.first->second;
+    }
+
+    inline void solveBoundaryControls(
+        const Eigen::MatrixXd &headState,
+        const Eigen::MatrixXd &tailState,
+        Eigen::MatrixXd &controls) const
+    {
+        const BoundaryInverseCache &cache =
+            boundaryInverseForPieceNum(static_cast<int>(this->durations_.size()));
+        Eigen::Matrix<double, S, Dim> rhs;
+
+        double h_power = 1.0;
+        for (int d = 0; d < S; ++d)
+        {
+            rhs.row(d) = h_power * headState.col(d).transpose();
+            h_power *= this->durations_(0);
+        }
+        controls.topRows(S) = cache.headInv * rhs;
+
+        h_power = 1.0;
+        for (int d = 0; d < S; ++d)
+        {
+            rhs.row(d) = h_power * tailState.col(d).transpose();
+            h_power *= this->durations_(0);
+        }
+        controls.bottomRows(S) = cache.tailInv * rhs;
+    }
+
+    inline void ensureFullSystemFactorized() const
+    {
+        if (fullSystemFactorized_)
+        {
+            return;
+        }
+        auto *self = const_cast<UniformNUBSTrajectoryT *>(this);
+        const int M = static_cast<int>(this->durations_.size());
+        self->buildSystemMatrixA(M, this->knots, self->A);
+        self->A.factorizeLU();
+        fullSystemFactorized_ = true;
+    }
+
+    static inline double factorialValue(const int n)
+    {
+        double result = 1.0;
+        for (int i = 2; i <= n; ++i)
+        {
+            result *= static_cast<double>(i);
+        }
+        return result;
+    }
+
+    inline int locateUniformPiece(double &t, double &tau) const
+    {
+        if (t <= 0.0)
+        {
+            t = 0.0;
+        }
+
+        const double total_duration = this->getTotalDuration();
+        if (t >= total_duration)
+        {
+            t = std::max(0.0, total_duration - 1.0e-12);
+        }
+
+        const int M = static_cast<int>(this->durations_.size());
+        const double h = total_duration / static_cast<double>(M);
+        int piece = static_cast<int>(t / h);
+        piece = std::min(std::max(piece, 0), M - 1);
+        tau = t - h * static_cast<double>(piece);
+        return piece;
+    }
+
+    inline void buildUniformPolynomialCache() const
+    {
+        const int M = static_cast<int>(this->durations_.size());
+        uniformPolyCoeffs_.assign(
+            M, Eigen::Matrix<double, P + 1, Dim>::Zero());
+
+        Eigen::Matrix<double, P + 1, P + 1> ders;
+        for (int piece = 0; piece < M; ++piece)
+        {
+            const int span = P + piece;
+            const double t0 = this->knots(span);
+            this->dersBasisFuns(P, span, t0, this->knots, ders);
+
+            auto &coeffs = uniformPolyCoeffs_[piece];
+            coeffs.setZero();
+            for (int k = 0; k <= P; ++k)
+            {
+                const double inv_factorial = 1.0 / factorialValue(k);
+                for (int j = 0; j <= P; ++j)
+                {
+                    coeffs.row(k) +=
+                        inv_factorial * ders(k, j) *
+                        this->control_points.row(span - P + j);
+                }
+            }
+        }
+
+        uniformPolyCacheValid_ = true;
+    }
+
+public:
+    static constexpr int SystemOrder = S;
+    static constexpr int Degree = P;
+
+    UniformNUBSTrajectoryT() : Parent() {}
+
+    using Parent::generateFixedRatio;
+    using Parent::generateWithTotalDuration;
+
+    inline void generate(const Eigen::MatrixXd &P_inner,
+                         const Eigen::MatrixXd &headState,
+                         const Eigen::MatrixXd &tailState,
+                         const Eigen::VectorXd &T,
+                         Eigen::MatrixXd &P_full)
+    {
+        Parent::generate(P_inner, headState, tailState, T, P_full);
+        fullSystemFactorized_ = true;
+        uniformProblemCached_ = false;
+        uniformPolyCacheValid_ = false;
+    }
+
+    inline void generateUniform(const Eigen::MatrixXd &P_inner,
+                                const Eigen::MatrixXd &headState,
+                                const Eigen::MatrixXd &tailState,
+                                const double total_duration,
+                                Eigen::MatrixXd &P_full)
+    {
+        const int M = static_cast<int>(P_inner.rows()) + 1;
+        const Eigen::VectorXd T = this->uniformDurations(M, total_duration);
+        this->validateGenerateInputs(P_inner, headState, tailState, T);
+
+        this->N_c = this->getCtrlPtNum(M);
+        this->durations_ = T;
+        this->knots = this->generateKnots(T, this->N_c);
+        this->knotJacobian.resize(0, 0);
+        P_full.setZero(this->N_c, Dim);
+
+        solveBoundaryControls(headState, tailState, P_full);
+        const BandedSystem &reducedA = reducedMatrixForPieceNum(M);
+
+        const int n = M - 1;
+        if (n > 0)
+        {
+            Eigen::Matrix<double, Eigen::Dynamic, Dim> b(n, Dim);
+            Eigen::Matrix<double, P + 1, P + 1> ders;
+            for (int i = 1; i < M; ++i)
+            {
+                const int row = i - 1;
+                const int span = P + i;
+                b.row(row) = P_inner.row(row);
+                this->dersBasisFuns(0, span, this->knots(span),
+                                    this->knots, ders);
+                for (int j = 0; j <= P; ++j)
+                {
+                    const int gidx = span - P + j;
+                    if (gidx < S || gidx >= this->N_c - S)
+                    {
+                        b.row(row) -= ders(0, j) * P_full.row(gidx);
+                    }
+                }
+            }
+
+            reducedA.solve(b);
+            P_full.middleRows(S, n) = b;
+        }
+
+        this->control_points = P_full;
+        fullSystemFactorized_ = false;
+        uniformProblemCached_ = true;
+        uniformInnerPoints_ = P_inner;
+        uniformHeadState_ = headState.template leftCols<S>();
+        uniformTailState_ = tailState.template leftCols<S>();
+        uniformPolyCacheValid_ = false;
+    }
+
+    inline void prepareEvaluationCache() const
+    {
+        if (!uniformPolyCacheValid_)
+        {
+            buildUniformPolynomialCache();
+        }
+    }
+
+    inline int findUniformSpan(double &t) const
+    {
+        if (t <= 0.0)
+        {
+            t = 0.0;
+            return P;
+        }
+
+        const double total_duration = this->getTotalDuration();
+        if (t >= total_duration)
+        {
+            t = std::max(0.0, total_duration - 1.0e-12);
+        }
+
+        const int M = static_cast<int>(this->durations_.size());
+        const double h = total_duration / static_cast<double>(M);
+        int piece = static_cast<int>(t / h);
+        piece = std::min(std::max(piece, 0), M - 1);
+        return P + piece;
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> evaluate(double t,
+                                                  const int d_ord = 0) const
+    {
+        if (uniformPolyCacheValid_ && d_ord <= P)
+        {
+            double tau = 0.0;
+            const int piece = locateUniformPiece(t, tau);
+            const auto &coeffs = uniformPolyCoeffs_[piece];
+
+            Eigen::Matrix<double, Dim, 1> res =
+                Eigen::Matrix<double, Dim, 1>::Zero();
+            if (d_ord <= P)
+            {
+                res = coeffs.row(P).transpose();
+                double multiplier = 1.0;
+                for (int m = 0; m < d_ord; ++m)
+                {
+                    multiplier *= static_cast<double>(P - m);
+                }
+                res *= multiplier;
+
+                for (int k = P - 1; k >= d_ord; --k)
+                {
+                    multiplier = 1.0;
+                    for (int m = 0; m < d_ord; ++m)
+                    {
+                        multiplier *= static_cast<double>(k - m);
+                    }
+                    res = tau * res + multiplier * coeffs.row(k).transpose();
+                }
+            }
+            return res;
+        }
+
+        if (d_ord <= P)
+        {
+            prepareEvaluationCache();
+            return evaluate(t, d_ord);
+        }
+
+        const int span = findUniformSpan(t);
+        Eigen::Matrix<double, P + 1, P + 1> ders;
+        this->dersBasisFuns(d_ord, span, t, this->knots, ders);
+
+        Eigen::Matrix<double, Dim, 1> res =
+            Eigen::Matrix<double, Dim, 1>::Zero();
+        for (int j = 0; j <= P; ++j)
+        {
+            res += ders(d_ord, j) *
+                   this->control_points.row(span - P + j).transpose();
+        }
+        return res;
+    }
+
+    inline void evaluatePVA(double t,
+                            Eigen::Matrix<double, Dim, 1> &pos,
+                            Eigen::Matrix<double, Dim, 1> &vel,
+                            Eigen::Matrix<double, Dim, 1> &acc) const
+    {
+        if (uniformPolyCacheValid_)
+        {
+            double tau = 0.0;
+            const int piece = locateUniformPiece(t, tau);
+            const auto &coeffs = uniformPolyCoeffs_[piece];
+
+            pos = coeffs.row(P).transpose();
+            for (int k = P - 1; k >= 0; --k)
+            {
+                pos = tau * pos + coeffs.row(k).transpose();
+            }
+
+            vel = static_cast<double>(P) * coeffs.row(P).transpose();
+            for (int k = P - 1; k >= 1; --k)
+            {
+                vel = tau * vel +
+                      static_cast<double>(k) * coeffs.row(k).transpose();
+            }
+
+            acc = static_cast<double>(P * (P - 1)) *
+                  coeffs.row(P).transpose();
+            for (int k = P - 1; k >= 2; --k)
+            {
+                acc = tau * acc +
+                      static_cast<double>(k * (k - 1)) *
+                          coeffs.row(k).transpose();
+            }
+            return;
+        }
+
+        prepareEvaluationCache();
+        evaluatePVA(t, pos, vel, acc);
+        return;
+
+        const int span = findUniformSpan(t);
+        Eigen::Matrix<double, P + 1, P + 1> ders;
+        this->dersBasisFuns(std::min(2, P), span, t, this->knots, ders);
+
+        pos.setZero();
+        vel.setZero();
+        acc.setZero();
+        for (int j = 0; j <= P; ++j)
+        {
+            const Eigen::Matrix<double, Dim, 1> ctrl =
+                this->control_points.row(span - P + j).transpose();
+            pos += ders(0, j) * ctrl;
+            vel += ders(1, j) * ctrl;
+            acc += ders(2, j) * ctrl;
+        }
+    }
+
+    inline void getEnergyAndFiniteDiffGrad(double &cost,
+                                           Eigen::MatrixXd &gradByPoints,
+                                           Eigen::VectorXd &gradByTimes) const
+    {
+        ensureFullSystemFactorized();
+        Parent::getEnergyAndFiniteDiffGrad(cost, gradByPoints, gradByTimes);
+    }
+
+    inline void getEnergyAndFiniteDiffGradFull(double &cost,
+                                               Eigen::MatrixXd &gradByPoints,
+                                               Eigen::VectorXd &gradByTimes) const
+    {
+        ensureFullSystemFactorized();
+        Parent::getEnergyAndFiniteDiffGradFull(cost, gradByPoints, gradByTimes);
+    }
+
+    inline void getEnergyAndFixedRatioGrad(double &cost,
+                                           Eigen::MatrixXd &gradByPoints,
+                                           double &gradByTotalDuration) const
+    {
+        ensureFullSystemFactorized();
+        Parent::getEnergyAndFixedRatioGrad(cost, gradByPoints,
+                                           gradByTotalDuration);
+    }
+
+    inline void getEnergyAndTotalDurationGrad(double &cost,
+                                              Eigen::MatrixXd &gradByPoints,
+                                              double &gradByTotalDuration) const
+    {
+        getEnergyAndUniformTimeGrad(cost, gradByPoints, gradByTotalDuration);
+    }
+
+    inline void getEnergyAndUniformTimeGrad(double &cost,
+                                            Eigen::MatrixXd &gradByPoints,
+                                            double &gradByTotalDuration) const
+    {
+        if (!uniformProblemCached_)
+        {
+            ensureFullSystemFactorized();
+            Parent::getEnergyAndFixedRatioGrad(cost, gradByPoints,
+                                               gradByTotalDuration);
+            return;
+        }
+
+        Eigen::MatrixXd gdC;
+        this->getEnergyPartialGradByCoeffs(cost, gdC);
+        const int M = static_cast<int>(this->durations_.size());
+        const int n = M - 1;
+        gradByPoints.resize(n, Dim);
+        if (n > 0)
+        {
+            Eigen::MatrixXd adj = gdC.middleRows(S, n);
+            reducedMatrixForPieceNum(M).solveAdj(adj);
+            gradByPoints = adj;
+        }
+
+        double plus_delta = 0.0;
+        double minus_delta = 0.0;
+        this->finiteDiffDeltasForFixedRatioTotalDuration(plus_delta,
+                                                         minus_delta);
+
+        UniformNUBSTrajectoryT plusTraj;
+        UniformNUBSTrajectoryT minusTraj;
+        Eigen::MatrixXd tmp;
+        const double total_duration = this->getTotalDuration();
+        plusTraj.generateUniform(uniformInnerPoints_, uniformHeadState_,
+                                 uniformTailState_,
+                                 total_duration + plus_delta, tmp);
+        minusTraj.generateUniform(uniformInnerPoints_, uniformHeadState_,
+                                  uniformTailState_,
+                                  total_duration + minus_delta, tmp);
+        gradByTotalDuration =
+            (plusTraj.getEnergy() - minusTraj.getEnergy()) /
+            (plus_delta - minus_delta);
+    }
 };
 
 template <int Dim>
@@ -2314,6 +3113,27 @@ using NUBSTrajectoryS3 = QuinticNUBS<Dim>;
 
 template <int Dim>
 using NUBSTrajectoryS4 = SepticNUBS<Dim>;
+
+template <int Dim, int MaxP = 7>
+using UniformNUBSTrajectory = NUBSTrajectory<Dim, MaxP>;
+
+template <int Dim>
+using UniformCubicNUBS = UniformNUBSTrajectoryT<Dim, 2>;
+
+template <int Dim>
+using UniformQuinticNUBS = UniformNUBSTrajectoryT<Dim, 3>;
+
+template <int Dim>
+using UniformSepticNUBS = UniformNUBSTrajectoryT<Dim, 4>;
+
+template <int Dim>
+using UniformNUBSTrajectoryS2 = UniformCubicNUBS<Dim>;
+
+template <int Dim>
+using UniformNUBSTrajectoryS3 = UniformQuinticNUBS<Dim>;
+
+template <int Dim>
+using UniformNUBSTrajectoryS4 = UniformSepticNUBS<Dim>;
 
 } // namespace nubs
 

@@ -33,6 +33,9 @@ E = \int_0^T \|p^{(s)}(t)\|^2 dt
 $$
 
 - Propagate energy gradients to intermediate points and segment times.
+- Propagate energy gradients to intermediate points and one fixed-ratio
+  total-duration variable, avoiding per-segment time gradients in optimization
+  loops that keep the time allocation ratios fixed.
 - Provide both runtime-order and fixed-order APIs.
 - Include focused tests against MINCO construction, energy, and gradient propagation.
 
@@ -111,7 +114,56 @@ nubs::QuinticNUBS<3> quintic; // NUBSTrajectoryT<3, 3>
 nubs::SepticNUBS<3> septic;   // NUBSTrajectoryT<3, 4>
 ```
 
+Uniform-time aliases:
+
+```cpp
+nubs::UniformCubicNUBS<3> uniform_cubic;
+nubs::UniformQuinticNUBS<3> uniform_quintic;
+nubs::UniformSepticNUBS<3> uniform_septic;
+```
+
 The fixed-order implementation uses compile-time Gauss rules, fixed-degree basis kernels, and fixed-degree matrix assembly for construction and gradient propagation. The default optimization path uses centered finite-difference time gradients with local affected-span and affected-row reduction. The analytic time-gradient path is kept mainly for validation.
+
+For a smaller timing decision space, use the fixed-ratio total-duration path:
+
+```cpp
+Eigen::VectorXd ratios(3);
+ratios << 1.0, 1.2, 1.0; // ratios do not need to sum to one
+
+const double total_duration = 3.2;
+traj.generateWithTotalDuration(P_inner, headState, tailState,
+                               ratios, total_duration, control_points);
+
+double cost = 0.0;
+Eigen::MatrixXd grad_points;
+double grad_total_duration = 0.0;
+traj.getEnergyAndFixedRatioGrad(cost, grad_points, grad_total_duration);
+```
+
+This treats `T_i = total_duration * ratios_i / sum(ratios)` and returns a
+single scalar time gradient. Internally the gradient path perturbs only the
+total duration while preserving ratios, so it does not run the per-segment
+time-gradient loop.
+
+For uniform segment times, use the semantic alias and helper:
+
+```cpp
+nubs::UniformQuinticNUBS<3> uniform_traj;
+uniform_traj.generateUniform(P_inner, headState, tailState,
+                             total_duration, control_points);
+
+double uniform_cost = 0.0;
+Eigen::MatrixXd uniform_grad_points;
+double uniform_grad_total_duration = 0.0;
+uniform_traj.getEnergyAndUniformTimeGrad(uniform_cost,
+                                         uniform_grad_points,
+                                         uniform_grad_total_duration);
+```
+
+`UniformNUBSTrajectoryT` uses a reduced uniform-time construction path. The
+first and last `S` control points are recovered directly from boundary states,
+and only the `M - 1` interior control points are solved from a constant
+factorized banded matrix cached by piece count.
 
 ## Usage Example
 
@@ -169,6 +221,8 @@ Main groups:
 - Basic construction checks for `s = 2, 3, 4`
 - Minimal API usage smoke test
 - MINCO trajectory and energy comparisons
+- Uniform-time comparisons against the vendored
+  `include/large_scale_traj_opt/` implementation for minimum jerk and snap
 - MINCO energy-gradient propagation comparisons
 - Centered finite-difference gradient checks
 - Generic vs fixed-order equivalence checks
@@ -183,10 +237,22 @@ cmake -S . -B build
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
+
+The large-scale optimizer comparison can also be run directly:
+
+```bash
+./bin/test_large_scale_uniform_compare
+```
+
+It checks uniform NUBS against `JerkOpt` and `SnapOpt` for objective and
+sampled position/velocity/acceleration consistency, then prints construction
+and evaluation timings.
 ## Repository Layout
 
 - `include/NUBSTrajectory.hpp`: main implementation
 - `include/gcopter/`: vendored MINCO-related headers used for comparison tests
+- `include/large_scale_traj_opt/`: vendored headers from
+  `ZJU-FAST-Lab/large_scale_traj_optimizer` used for uniform-time comparison
 - `include/tools/`: test helpers and MINCO adapter
 - `src/`: test and benchmark entry points
 
