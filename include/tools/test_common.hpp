@@ -174,6 +174,26 @@ inline void printTiming(const std::string &label, const TimingStats &timing)
               << ", max=" << timing.max_us << " us" << std::endl;
 }
 
+inline double speedupRatio(const TimingStats &reference,
+                           const TimingStats &candidate)
+{
+    if (candidate.avg_us <= std::numeric_limits<double>::epsilon())
+    {
+        return std::numeric_limits<double>::infinity();
+    }
+    return reference.avg_us / candidate.avg_us;
+}
+
+inline void printSpeedup(const std::string &label,
+                         const TimingStats &reference,
+                         const TimingStats &candidate)
+{
+    std::cout << std::fixed << std::setprecision(3)
+              << label << ": "
+              << speedupRatio(reference, candidate)
+              << "x" << std::endl;
+}
+
 inline double relativeError(const double actual, const double expected)
 {
     const double scale = std::max({1.0, std::abs(actual), std::abs(expected)});

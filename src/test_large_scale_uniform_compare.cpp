@@ -406,6 +406,12 @@ void benchmarkUniformConstructionAndEvaluation(const int piece_num,
     nubs_test::printTiming("    full NUBS eval pva", full_nubs_eval_pva);
     nubs_test::printTiming("    MINCO eval pva", minco_eval_pva);
     nubs_test::printTiming("    large eval pva", large_eval_pva);
+    nubs_test::printSpeedup("    uniform NUBS vs MINCO construct speedup",
+                            minco_construct, nubs_construct);
+    nubs_test::printSpeedup("    uniform NUBS vs MINCO eval pos speedup",
+                            minco_eval_pos, nubs_eval_pos);
+    nubs_test::printSpeedup("    uniform NUBS vs MINCO eval pva speedup",
+                            minco_eval_pva, nubs_eval_pva);
 }
 
 void runLargeScaleUniformCompare()

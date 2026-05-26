@@ -3117,6 +3117,9 @@ using NUBSTrajectoryS4 = SepticNUBS<Dim>;
 template <int Dim, int MaxP = 7>
 using UniformNUBSTrajectory = NUBSTrajectory<Dim, MaxP>;
 
+template <int Dim, int S>
+using UBSTrajectoryT = UniformNUBSTrajectoryT<Dim, S>;
+
 template <int Dim>
 using UniformCubicNUBS = UniformNUBSTrajectoryT<Dim, 2>;
 
@@ -3125,6 +3128,15 @@ using UniformQuinticNUBS = UniformNUBSTrajectoryT<Dim, 3>;
 
 template <int Dim>
 using UniformSepticNUBS = UniformNUBSTrajectoryT<Dim, 4>;
+
+template <int Dim>
+using CubicUBS = UBSTrajectoryT<Dim, 2>;
+
+template <int Dim>
+using QuinticUBS = UBSTrajectoryT<Dim, 3>;
+
+template <int Dim>
+using SepticUBS = UBSTrajectoryT<Dim, 4>;
 
 template <int Dim>
 using UniformNUBSTrajectoryS2 = UniformCubicNUBS<Dim>;

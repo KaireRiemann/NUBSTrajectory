@@ -4,8 +4,13 @@
 #include "tools/minco_adapter.hpp"
 #include "tools/optimization_test_cases.hpp"
 
+#include <algorithm>
 #include <cstdlib>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace
@@ -75,21 +80,84 @@ inline void keepAlive(const T &value)
     (void)sink;
 }
 
+struct ConstructionBenchmarkRow
+{
+    int order = 0;
+    int piece_num = 0;
+    int runs = 0;
+    double ubs_avg_us = 0.0;
+    double nubs_avg_us = 0.0;
+    double minco_avg_us = 0.0;
+    double large_scale_avg_us = 0.0;
+    std::string large_scale_name;
+};
+
+void printRow(const ConstructionBenchmarkRow &row)
+{
+    std::cout << std::fixed << std::setprecision(3)
+              << "S=" << row.order
+              << ", M=" << row.piece_num
+              << ", runs=" << row.runs
+              << ", ubs_avg_us=" << row.ubs_avg_us
+              << ", nubs_avg_us=" << row.nubs_avg_us
+              << ", minco_avg_us=" << row.minco_avg_us
+              << ", " << row.large_scale_name
+              << "_avg_us=" << row.large_scale_avg_us
+              << ", ubs_vs_nubs_speedup="
+              << row.nubs_avg_us / row.ubs_avg_us << "x"
+              << ", ubs_vs_large_speedup="
+              << row.large_scale_avg_us / row.ubs_avg_us << "x"
+              << ", ubs_vs_minco_speedup="
+              << row.minco_avg_us / row.ubs_avg_us << "x"
+              << std::endl;
+}
+
+void writeCsv(const std::string &path,
+              const std::vector<ConstructionBenchmarkRow> &rows)
+{
+    std::ofstream out(path);
+    if (!out)
+    {
+        throw std::runtime_error("failed to open CSV output: " + path);
+    }
+
+    out << "order,piece_count,runs,"
+        << "ubs_avg_us,nubs_avg_us,minco_avg_us,large_scale_avg_us,"
+        << "large_scale_name,"
+        << "ubs_vs_nubs_speedup,ubs_vs_large_speedup,ubs_vs_minco_speedup\n";
+    out << std::fixed << std::setprecision(9);
+    for (const auto &row : rows)
+    {
+        out << row.order << ','
+            << row.piece_num << ','
+            << row.runs << ','
+            << row.ubs_avg_us << ','
+            << row.nubs_avg_us << ','
+            << row.minco_avg_us << ','
+            << row.large_scale_avg_us << ','
+            << row.large_scale_name << ','
+            << row.nubs_avg_us / row.ubs_avg_us << ','
+            << row.large_scale_avg_us / row.ubs_avg_us << ','
+            << row.minco_avg_us / row.ubs_avg_us << '\n';
+    }
+}
+
 template <int S>
-void runOneConstructionBenchmark(const int piece_num, const int runs)
+ConstructionBenchmarkRow runOneConstructionBenchmark(const int piece_num,
+                                                     const int runs)
 {
     using Adapter = LargeScaleUniformAdapter<S>;
     const auto data = nubs_test::makeRandomProblem<3>(
         S, piece_num, 11000 + 100 * S + piece_num);
     const double total_duration = data.durations.sum();
     const Eigen::VectorXd uniform_durations =
-        nubs::UniformNUBSTrajectoryT<3, S>::uniformDurations(piece_num,
-                                                             total_duration);
+        nubs::UBSTrajectoryT<3, S>::uniformDurations(piece_num,
+                                                     total_duration);
 
-    const auto uniform_nubs = nubs_test::measureRepeated(
+    const auto ubs = nubs_test::measureRepeated(
         [&]()
         {
-            nubs::UniformNUBSTrajectoryT<3, S> trajectory;
+            nubs::UBSTrajectoryT<3, S> trajectory;
             Eigen::MatrixXd control_points;
             trajectory.generateUniform(data.inner_points, data.head_state,
                                        data.tail_state, total_duration,
@@ -134,24 +202,20 @@ void runOneConstructionBenchmark(const int piece_num, const int runs)
         },
         runs);
 
-    std::cout << std::fixed << std::setprecision(3)
-              << "S=" << S
-              << ", M=" << piece_num
-              << ", runs=" << runs
-              << ", uniform_nubs_avg_us=" << uniform_nubs.avg_us
-              << ", full_nubs_avg_us=" << full_nubs.avg_us
-              << ", minco_avg_us=" << minco.avg_us
-              << ", " << Adapter::name() << "_avg_us=" << large_scale.avg_us
-              << ", uniform_vs_large="
-              << large_scale.avg_us / uniform_nubs.avg_us
-              << "x"
-              << ", uniform_vs_minco="
-              << minco.avg_us / uniform_nubs.avg_us
-              << "x"
-              << std::endl;
+    ConstructionBenchmarkRow row;
+    row.order = S;
+    row.piece_num = piece_num;
+    row.runs = runs;
+    row.ubs_avg_us = ubs.avg_us;
+    row.nubs_avg_us = full_nubs.avg_us;
+    row.minco_avg_us = minco.avg_us;
+    row.large_scale_avg_us = large_scale.avg_us;
+    row.large_scale_name = Adapter::name();
+    printRow(row);
+    return row;
 }
 
-void runConstructionBenchmark(const int runs)
+std::vector<ConstructionBenchmarkRow> runConstructionBenchmark(const int runs)
 {
     const std::vector<int> medium_counts = {
         2, 4, 8, 16, 32, 64, 128, 256, 512};
@@ -163,16 +227,19 @@ void runConstructionBenchmark(const int runs)
               << std::endl;
     std::cout << "runs per piece count: " << runs << std::endl;
 
+    std::vector<ConstructionBenchmarkRow> rows;
+    rows.reserve(2 * (medium_counts.size() + large_counts.size()));
     for (const int piece_num : medium_counts)
     {
-        runOneConstructionBenchmark<3>(piece_num, runs);
-        runOneConstructionBenchmark<4>(piece_num, runs);
+        rows.push_back(runOneConstructionBenchmark<3>(piece_num, runs));
+        rows.push_back(runOneConstructionBenchmark<4>(piece_num, runs));
     }
     for (const int piece_num : large_counts)
     {
-        runOneConstructionBenchmark<3>(piece_num, runs);
-        runOneConstructionBenchmark<4>(piece_num, runs);
+        rows.push_back(runOneConstructionBenchmark<3>(piece_num, runs));
+        rows.push_back(runOneConstructionBenchmark<4>(piece_num, runs));
     }
+    return rows;
 }
 
 } // namespace
@@ -180,14 +247,24 @@ void runConstructionBenchmark(const int runs)
 int main(int argc, char **argv)
 {
     int runs = 1000;
+    std::string csv_path;
     if (argc > 1)
     {
         runs = std::max(1, std::atoi(argv[1]));
     }
+    if (argc > 2)
+    {
+        csv_path = argv[2];
+    }
 
     try
     {
-        runConstructionBenchmark(runs);
+        const auto rows = runConstructionBenchmark(runs);
+        if (!csv_path.empty())
+        {
+            writeCsv(csv_path, rows);
+            std::cout << "wrote CSV: " << csv_path << std::endl;
+        }
     }
     catch (const std::exception &e)
     {

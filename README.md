@@ -120,6 +120,11 @@ Uniform-time aliases:
 nubs::UniformCubicNUBS<3> uniform_cubic;
 nubs::UniformQuinticNUBS<3> uniform_quintic;
 nubs::UniformSepticNUBS<3> uniform_septic;
+
+// Short aliases for the dedicated uniform B-spline construction path.
+nubs::CubicUBS<3> cubic_ubs;
+nubs::QuinticUBS<3> quintic_ubs;
+nubs::SepticUBS<3> septic_ubs;
 ```
 
 The fixed-order implementation uses compile-time Gauss rules, fixed-degree basis kernels, and fixed-degree matrix assembly for construction and gradient propagation. The default optimization path uses centered finite-difference time gradients with local affected-span and affected-row reduction. The analytic time-gradient path is kept mainly for validation.
@@ -247,6 +252,23 @@ The large-scale optimizer comparison can also be run directly:
 It checks uniform NUBS against `JerkOpt` and `SnapOpt` for objective and
 sampled position/velocity/acceleration consistency, then prints construction
 and evaluation timings.
+
+Construction-speed benchmark and plot:
+
+```bash
+./bin/bench_large_scale_construction 1000 build/uniform_construction_speed.csv
+python3 scripts/plot_uniform_construction_speed.py \
+    build/uniform_construction_speed.csv \
+    docs/images/uniform_construction_speed.svg
+```
+
+The plot compares uniform-time `NUBS` (the general non-uniform solver given
+uniform durations), `UBS` (the dedicated reduced uniform-time B-spline path),
+original `MINCO`, and the vendored `large_scale_traj_opt` implementation. The
+two centered panels show `s = 3` and `s = 4` separately.
+
+![Uniform-time construction speed](docs/images/uniform_construction_speed.svg)
+
 ## Repository Layout
 
 - `include/NUBSTrajectory.hpp`: main implementation
