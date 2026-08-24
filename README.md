@@ -38,6 +38,8 @@ $$
   loops that keep the time allocation ratios fixed.
 - Provide both runtime-order and fixed-order APIs.
 - Include focused tests against MINCO construction, energy, and gradient propagation.
+- Include repeatable construction and gradient-validation benchmarks, together
+  with scripts that render their results as SVG figures.
 
 ## Basic Form
 
@@ -91,6 +93,12 @@ For the same system order `s`, segment times, boundary states, and intermediate 
 - NUBSTrajectory uses non-uniform B-spline control points.
 
 Because both bases span the same polynomial trajectory space under the same constraints, the resulting trajectory, energy, and propagated gradients are numerically equivalent. The tests compare NUBS against MINCO for construction, energy, coefficient-space energy gradients, waypoint gradients, and time gradients.
+
+The optimization variables remain the intermediate waypoints and segment
+durations; NUBS recovers B-spline control points internally from the structured
+system.
+
+![Optimization variables used by B-spline, MINCO, and NUBS](docs/images/optimization_variable_comparison.svg)
 
 ## API
 
@@ -285,6 +293,54 @@ two centered panels show `s = 3` and `s = 4` separately.
 
 ![Uniform-time construction speed](docs/images/uniform_construction_speed.svg)
 
+## Reproducible Validation and Figures
+
+The checked-in CSV files under `docs/data/` and SVG files under `docs/images/`
+are reproducible from the following commands. The figure-rendering scripts
+require Python 3 only; they use the standard library.
+
+```bash
+# Export NUBS-versus-MINCO trajectory and energy data, then render Figures 2--5.
+./bin/export_equivalence_figure_data docs/data
+python3 scripts/plot_paper_figures.py \
+    --data-dir docs/data --image-dir docs/images
+
+# Render the optimization-variable diagram.
+python3 scripts/plot_optimization_variable_comparison.py \
+    docs/images/optimization_variable_comparison.svg
+```
+
+The generated figures document the numerical equivalence with MINCO, compare
+the NUBS and piecewise-polynomial system dimensions, show the banded NUBS
+matrix structure, and illustrate the cached reduced matrix used by the
+uniform-time path.
+
+![NUBS and MINCO equivalence for a minimum-snap trajectory](docs/images/fig2_nubs_minco_equivalence.svg)
+
+![NUBS versus MINCO forward-system dimensions](docs/images/fig3_system_dimension_comparison.svg)
+
+The non-uniform construction benchmark compares NUBS and MINCO for
+`s = 3, 4` and `M = 2, 4, 8, 16, 32, 64` segments. Its first argument is the
+number of repetitions per row and its optional second argument is the CSV
+output path.
+
+```bash
+./bin/bench_nonuniform_construction 1000 \
+    build/nonuniform_construction_speed.csv
+python3 scripts/plot_nonuniform_construction_speed.py \
+    build/nonuniform_construction_speed.csv \
+    docs/images/nonuniform_construction_speed.svg
+```
+
+For gradient validation, run the following benchmark. It reports the maximum,
+RMS, and relative errors of NUBS energy gradients against both centered finite
+differences and MINCO; its arguments follow the same `runs [csv-path]` form.
+
+```bash
+./bin/bench_energy_gradient_validation 100 \
+    build/energy_gradient_validation.csv
+```
+
 ## Repository Layout
 
 - `include/NUBSTrajectory.hpp`: main implementation
@@ -292,7 +348,10 @@ two centered panels show `s = 3` and `s = 4` separately.
 - `include/large_scale_traj_opt/`: vendored headers from
   `ZJU-FAST-Lab/large_scale_traj_optimizer` used for uniform-time comparison
 - `include/tools/`: test helpers and MINCO adapter
-- `src/`: test and benchmark entry points
+- `src/`: test, benchmark, and data-export entry points
+- `scripts/`: SVG plotting and figure-generation scripts
+- `docs/data/`: checked-in reproducibility data
+- `docs/images/`: checked-in generated figures
 
 ## Acknowledgments
 
