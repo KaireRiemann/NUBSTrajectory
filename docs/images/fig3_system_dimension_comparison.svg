@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1650" height="760" viewBox="0 0 1650 760">
+<defs>
+<marker id="arrow-gray" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 10 4 L 0 8 z" fill="#697586"/>
+</marker>
+<marker id="arrow-green" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 10 4 L 0 8 z" fill="#009e73"/>
+</marker>
+<marker id="arrow-blue" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 10 4 L 0 8 z" fill="#0072b2"/>
+</marker>
+</defs>
+<style>
+text { font-family: Inter, Helvetica Neue, Arial, sans-serif; }
+</style>
+<rect x="0" y="0" width="1650" height="760" fill="#ffffff"/>
+<text x="825.0" y="48.0" text-anchor="middle" font-size="28" font-weight="800" fill="#17202a" letter-spacing="0">Fig. 3. Construction system dimension vs. segment count</text>
+<text x="825.0" y="78.0" text-anchor="middle" font-size="15" font-weight="500" fill="#52616f" letter-spacing="0">NUBS keeps the construction system linear in M with a much smaller slope than MINCO coefficients.</text>
+<rect x="92.0" y="150.0" width="680.0" height="480.0" rx="4.0" ry="4.0" fill="#fbfcfe" stroke="#d6dde6" stroke-width="1.0"/>
+<line x1="92.0" y1="150.0" x2="92.0" y2="630.0" stroke="#d6dde6" stroke-width="0.8" stroke-linecap="round"/>
+<text x="92.0" y="652.0" text-anchor="middle" font-size="11" font-weight="400" fill="#52616f" letter-spacing="0">1</text>
+<line x1="253.9" y1="150.0" x2="253.9" y2="630.0" stroke="#d6dde6" stroke-width="0.8" stroke-linecap="round"/>
+<text x="253.9" y="652.0" text-anchor="middle" font-size="11" font-weight="400" fill="#52616f" letter-spacing="0">16</text>
+<line x1="426.6" y1="150.0" x2="426.6" y2="630.0" stroke="#d6dde6" stroke-width="0.8" stroke-linecap="round"/>
+<text x="426.6" y="652.0" text-anchor="middle" font-size="11" font-weight="400" fill="#52616f" letter-spacing="0">32</text>
+<line x1="599.3" y1="150.0" x2="599.3" y2="630.0" stroke="#d6dde6" stroke-width="0.8" stroke-linecap="round"/>
+<text x="599.3" y="652.0" text-anchor="middle" font-size="11" font-weight="400" fill="#52616f" letter-spacing="0">48</text>
+<line x1="772.0" y1="150.0" x2="772.0" y2="630.0" stroke="#d6dde6" stroke-width="0.8" stroke-linecap="round"/>
+<text x="772.0" y="652.0" text-anchor="middle" font-size="11" font-weight="400" fill="#52616f" letter-spacing="0">64</text>
+<line x1="92.0" y1="630.0" x2="772.0" y2="630.0" stroke="#d6dde6" stroke-width="0.8" stroke-linecap="round"/>
+<text x="83.0" y="634.0" text-anchor="end" font-size="11" font-weight="400" fill="#52616f" letter-spacing="0">0</text>
+<line x1="92.0" y1="514.3" x2="772.0" y2="514.3" stroke="#d6dde6" stroke-width="0.8" stroke-linecap="round"/>
+<text x="83.0" y="518.3" text-anchor="end" font-size="11" font-weight="400" fill="#52616f" letter-spacing="0">100</text>
+<line x1="92.0" y1="398.5" x2="772.0" y2="398.5" stroke="#d6dde6" stroke-width="0.8" stroke-linecap="round"/>
+<text x="83.0" y="402.5" text-anchor="end" font-size="11" font-weight="400" fill="#52616f" letter-spacing="0">200</text>
+<line x1="92.0" y1="282.8" x2="772.0" y2="282.8" stroke="#d6dde6" stroke-width="0.8" stroke-linecap="round"/>
+<text x="83.0" y="286.8" text-anchor="end" font-size="11" font-weight="400" fill="#52616f" letter-spacing="0">300</text>
+<line x1="92.0" y1="167.0" x2="772.0" y2="167.0" stroke="#d6dde6" stroke-width="0.8" stroke-linecap="round"/>
+<text x="83.0" y="171.0" text-anchor="end" font-size="11" font-weight="400" fill="#52616f" letter-spacing="0">400</text>
+<line x1="92.0" y1="630.0" x2="772.0" y2="630.0" stroke="#17202a" stroke-width="1.2" stroke-linecap="round"/>
+<line x1="92.0" y1="150.0" x2="92.0" y2="630.0" stroke="#17202a" stroke-width="1.2" stroke-linecap="round"/>
+<text x="432.0" y="678.0" text-anchor="middle" font-size="13" font-weight="600" fill="#17202a" letter-spacing="0">segment count M</text>
+<text x="40.0" y="390.0" text-anchor="middle" font-size="13" font-weight="600" fill="#17202a" letter-spacing="0">system dimension</text>
+<text x="432.0" y="125.0" text-anchor="middle" font-size="18" font-weight="800" fill="#17202a" letter-spacing="0">s = 3  minimum jerk</text>
+<polyline points="92.0,623.1 102.8,616.1 113.6,609.2 124.4,602.2 135.2,595.3 146.0,588.3 156.8,581.4 167.6,574.4 178.3,567.5 189.1,560.6 199.9,553.6 210.7,546.7 221.5,539.7 232.3,532.8 243.1,525.8 253.9,518.9 264.7,511.9 275.5,505.0 286.3,498.1 297.1,491.1 307.9,484.2 318.7,477.2 329.5,470.3 340.3,463.3 351.0,456.4 361.8,449.4 372.6,442.5 383.4,435.6 394.2,428.6 405.0,421.7 415.8,414.7 426.6,407.8 437.4,400.8 448.2,393.9 459.0,386.9 469.8,380.0 480.6,373.1 491.4,366.1 502.2,359.2 513.0,352.2 523.7,345.3 534.5,338.3 545.3,331.4 556.1,324.4 566.9,317.5 577.7,310.6 588.5,303.6 599.3,296.7 610.1,289.7 620.9,282.8 631.7,275.8 642.5,268.9 653.3,261.9 664.1,255.0 674.9,248.1 685.7,241.1 696.4,234.2 707.2,227.2 718.0,220.3 728.8,213.3 739.6,206.4 750.4,199.4 761.2,192.5 772.0,185.6" fill="none" stroke="#d55e00" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="92.0,623.1 102.8,621.9 113.6,620.7 124.4,619.6 135.2,618.4 146.0,617.3 156.8,616.1 167.6,615.0 178.3,613.8 189.1,612.6 199.9,611.5 210.7,610.3 221.5,609.2 232.3,608.0 243.1,606.9 253.9,605.7 264.7,604.5 275.5,603.4 286.3,602.2 297.1,601.1 307.9,599.9 318.7,598.8 329.5,597.6 340.3,596.4 351.0,595.3 361.8,594.1 372.6,593.0 383.4,591.8 394.2,590.6 405.0,589.5 415.8,588.3 426.6,587.2 437.4,586.0 448.2,584.9 459.0,583.7 469.8,582.5 480.6,581.4 491.4,580.2 502.2,579.1 513.0,577.9 523.7,576.8 534.5,575.6 545.3,574.4 556.1,573.3 566.9,572.1 577.7,571.0 588.5,569.8 599.3,568.7 610.1,567.5 620.9,566.3 631.7,565.2 642.5,564.0 653.3,562.9 664.1,561.7 674.9,560.6 685.7,559.4 696.4,558.2 707.2,557.1 718.0,555.9 728.8,554.8 739.6,553.6 750.4,552.5 761.2,551.3 772.0,550.1" fill="none" stroke="#0072b2" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="92.0,630.0 102.8,628.8 113.6,627.7 124.4,626.5 135.2,625.4 146.0,624.2 156.8,623.1 167.6,621.9 178.3,620.7 189.1,619.6 199.9,618.4 210.7,617.3 221.5,616.1 232.3,615.0 243.1,613.8 253.9,612.6 264.7,611.5 275.5,610.3 286.3,609.2 297.1,608.0 307.9,606.9 318.7,605.7 329.5,604.5 340.3,603.4 351.0,602.2 361.8,601.1 372.6,599.9 383.4,598.8 394.2,597.6 405.0,596.4 415.8,595.3 426.6,594.1 437.4,593.0 448.2,591.8 459.0,590.6 469.8,589.5 480.6,588.3 491.4,587.2 502.2,586.0 513.0,584.9 523.7,583.7 534.5,582.5 545.3,581.4 556.1,580.2 566.9,579.1 577.7,577.9 588.5,576.8 599.3,575.6 610.1,574.4 620.9,573.3 631.7,572.1 642.5,571.0 653.3,569.8 664.1,568.7 674.9,567.5 685.7,566.3 696.4,565.2 707.2,564.0 718.0,562.9 728.8,561.7 739.6,560.6 750.4,559.4 761.2,558.2 772.0,557.1" fill="none" stroke="#009e73" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="8 5"/>
+<rect x="116.0" y="174.0" width="300.0" height="86.0" rx="7.0" ry="7.0" fill="#ffffff" stroke="#d6dde6" stroke-width="1.0"/>
+<line x1="134.0" y1="196.0" x2="188.0" y2="196.0" stroke="#d55e00" stroke-width="2.6" stroke-linecap="round"/>
+<text x="200.0" y="200.0" text-anchor="start" font-size="12" font-weight="700" fill="#d55e00" letter-spacing="0">2Ms  MINCO / polynomial coeff.</text>
+<line x1="134.0" y1="220.0" x2="188.0" y2="220.0" stroke="#0072b2" stroke-width="2.6" stroke-linecap="round"/>
+<text x="200.0" y="224.0" text-anchor="start" font-size="12" font-weight="700" fill="#0072b2" letter-spacing="0">M+2s-1  NUBS</text>
+<line x1="134.0" y1="244.0" x2="188.0" y2="244.0" stroke="#009e73" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="8 5"/>
+<text x="200.0" y="248.0" text-anchor="start" font-size="12" font-weight="700" fill="#009e73" letter-spacing="0">M-1  UBS online solve</text>
+<rect x="880.0" y="150.0" width="680.0" height="480.0" rx="4.0" ry="4.0" fill="#fbfcfe" stroke="#d6dde6" stroke-width="1.0"/>
+<line x1="880.0" y1="150.0" x2="880.0" y2="630.0" stroke="#d6dde6" stroke-width="0.8" stroke-linecap="round"/>
+<text x="880.0" y="652.0" text-anchor="middle" font-size="11" font-weight="400" fill="#52616f" letter-spacing="0">1</text>
+<line x1="1041.9" y1="150.0" x2="1041.9" y2="630.0" stroke="#d6dde6" stroke-width="0.8" stroke-linecap="round"/>
+<text x="1041.9" y="652.0" text-anchor="middle" font-size="11" font-weight="400" fill="#52616f" letter-spacing="0">16</text>
+<line x1="1214.6" y1="150.0" x2="1214.6" y2="630.0" stroke="#d6dde6" stroke-width="0.8" stroke-linecap="round"/>
+<text x="1214.6" y="652.0" text-anchor="middle" font-size="11" font-weight="400" fill="#52616f" letter-spacing="0">32</text>
+<line x1="1387.3" y1="150.0" x2="1387.3" y2="630.0" stroke="#d6dde6" stroke-width="0.8" stroke-linecap="round"/>
+<text x="1387.3" y="652.0" text-anchor="middle" font-size="11" font-weight="400" fill="#52616f" letter-spacing="0">48</text>
+<line x1="1560.0" y1="150.0" x2="1560.0" y2="630.0" stroke="#d6dde6" stroke-width="0.8" stroke-linecap="round"/>
+<text x="1560.0" y="652.0" text-anchor="middle" font-size="11" font-weight="400" fill="#52616f" letter-spacing="0">64</text>
+<line x1="880.0" y1="630.0" x2="1560.0" y2="630.0" stroke="#d6dde6" stroke-width="0.8" stroke-linecap="round"/>
+<text x="871.0" y="634.0" text-anchor="end" font-size="11" font-weight="400" fill="#52616f" letter-spacing="0">0</text>
+<line x1="880.0" y1="521.5" x2="1560.0" y2="521.5" stroke="#d6dde6" stroke-width="0.8" stroke-linecap="round"/>
+<text x="871.0" y="525.5" text-anchor="end" font-size="11" font-weight="400" fill="#52616f" letter-spacing="0">125</text>
+<line x1="880.0" y1="413.0" x2="1560.0" y2="413.0" stroke="#d6dde6" stroke-width="0.8" stroke-linecap="round"/>
+<text x="871.0" y="417.0" text-anchor="end" font-size="11" font-weight="400" fill="#52616f" letter-spacing="0">250</text>
+<line x1="880.0" y1="304.5" x2="1560.0" y2="304.5" stroke="#d6dde6" stroke-width="0.8" stroke-linecap="round"/>
+<text x="871.0" y="308.5" text-anchor="end" font-size="11" font-weight="400" fill="#52616f" letter-spacing="0">375</text>
+<line x1="880.0" y1="196.0" x2="1560.0" y2="196.0" stroke="#d6dde6" stroke-width="0.8" stroke-linecap="round"/>
+<text x="871.0" y="200.0" text-anchor="end" font-size="11" font-weight="400" fill="#52616f" letter-spacing="0">500</text>
+<line x1="880.0" y1="630.0" x2="1560.0" y2="630.0" stroke="#17202a" stroke-width="1.2" stroke-linecap="round"/>
+<line x1="880.0" y1="150.0" x2="880.0" y2="630.0" stroke="#17202a" stroke-width="1.2" stroke-linecap="round"/>
+<text x="1220.0" y="678.0" text-anchor="middle" font-size="13" font-weight="600" fill="#17202a" letter-spacing="0">segment count M</text>
+<text x="828.0" y="390.0" text-anchor="middle" font-size="13" font-weight="600" fill="#17202a" letter-spacing="0">system dimension</text>
+<text x="1220.0" y="125.0" text-anchor="middle" font-size="18" font-weight="800" fill="#17202a" letter-spacing="0">s = 4  minimum snap</text>
+<polyline points="880.0,623.1 890.8,616.1 901.6,609.2 912.4,602.2 923.2,595.3 934.0,588.3 944.8,581.4 955.6,574.4 966.3,567.5 977.1,560.6 987.9,553.6 998.7,546.7 1009.5,539.7 1020.3,532.8 1031.1,525.8 1041.9,518.9 1052.7,511.9 1063.5,505.0 1074.3,498.1 1085.1,491.1 1095.9,484.2 1106.7,477.2 1117.5,470.3 1128.3,463.3 1139.0,456.4 1149.8,449.4 1160.6,442.5 1171.4,435.6 1182.2,428.6 1193.0,421.7 1203.8,414.7 1214.6,407.8 1225.4,400.8 1236.2,393.9 1247.0,386.9 1257.8,380.0 1268.6,373.1 1279.4,366.1 1290.2,359.2 1301.0,352.2 1311.7,345.3 1322.5,338.3 1333.3,331.4 1344.1,324.4 1354.9,317.5 1365.7,310.6 1376.5,303.6 1387.3,296.7 1398.1,289.7 1408.9,282.8 1419.7,275.8 1430.5,268.9 1441.3,261.9 1452.1,255.0 1462.9,248.1 1473.7,241.1 1484.4,234.2 1495.2,227.2 1506.0,220.3 1516.8,213.3 1527.6,206.4 1538.4,199.4 1549.2,192.5 1560.0,185.6" fill="none" stroke="#d55e00" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="880.0,623.1 890.8,622.2 901.6,621.3 912.4,620.5 923.2,619.6 934.0,618.7 944.8,617.8 955.6,617.0 966.3,616.1 977.1,615.2 987.9,614.4 998.7,613.5 1009.5,612.6 1020.3,611.8 1031.1,610.9 1041.9,610.0 1052.7,609.2 1063.5,608.3 1074.3,607.4 1085.1,606.6 1095.9,605.7 1106.7,604.8 1117.5,604.0 1128.3,603.1 1139.0,602.2 1149.8,601.4 1160.6,600.5 1171.4,599.6 1182.2,598.8 1193.0,597.9 1203.8,597.0 1214.6,596.1 1225.4,595.3 1236.2,594.4 1247.0,593.5 1257.8,592.7 1268.6,591.8 1279.4,590.9 1290.2,590.1 1301.0,589.2 1311.7,588.3 1322.5,587.5 1333.3,586.6 1344.1,585.7 1354.9,584.9 1365.7,584.0 1376.5,583.1 1387.3,582.3 1398.1,581.4 1408.9,580.5 1419.7,579.7 1430.5,578.8 1441.3,577.9 1452.1,577.0 1462.9,576.2 1473.7,575.3 1484.4,574.4 1495.2,573.6 1506.0,572.7 1516.8,571.8 1527.6,571.0 1538.4,570.1 1549.2,569.2 1560.0,568.4" fill="none" stroke="#0072b2" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="880.0,630.0 890.8,629.1 901.6,628.3 912.4,627.4 923.2,626.5 934.0,625.7 944.8,624.8 955.6,623.9 966.3,623.1 977.1,622.2 987.9,621.3 998.7,620.5 1009.5,619.6 1020.3,618.7 1031.1,617.8 1041.9,617.0 1052.7,616.1 1063.5,615.2 1074.3,614.4 1085.1,613.5 1095.9,612.6 1106.7,611.8 1117.5,610.9 1128.3,610.0 1139.0,609.2 1149.8,608.3 1160.6,607.4 1171.4,606.6 1182.2,605.7 1193.0,604.8 1203.8,604.0 1214.6,603.1 1225.4,602.2 1236.2,601.4 1247.0,600.5 1257.8,599.6 1268.6,598.8 1279.4,597.9 1290.2,597.0 1301.0,596.1 1311.7,595.3 1322.5,594.4 1333.3,593.5 1344.1,592.7 1354.9,591.8 1365.7,590.9 1376.5,590.1 1387.3,589.2 1398.1,588.3 1408.9,587.5 1419.7,586.6 1430.5,585.7 1441.3,584.9 1452.1,584.0 1462.9,583.1 1473.7,582.3 1484.4,581.4 1495.2,580.5 1506.0,579.7 1516.8,578.8 1527.6,577.9 1538.4,577.0 1549.2,576.2 1560.0,575.3" fill="none" stroke="#009e73" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="8 5"/>
+<rect x="904.0" y="174.0" width="300.0" height="86.0" rx="7.0" ry="7.0" fill="#ffffff" stroke="#d6dde6" stroke-width="1.0"/>
+<line x1="922.0" y1="196.0" x2="976.0" y2="196.0" stroke="#d55e00" stroke-width="2.6" stroke-linecap="round"/>
+<text x="988.0" y="200.0" text-anchor="start" font-size="12" font-weight="700" fill="#d55e00" letter-spacing="0">2Ms  MINCO / polynomial coeff.</text>
+<line x1="922.0" y1="220.0" x2="976.0" y2="220.0" stroke="#0072b2" stroke-width="2.6" stroke-linecap="round"/>
+<text x="988.0" y="224.0" text-anchor="start" font-size="12" font-weight="700" fill="#0072b2" letter-spacing="0">M+2s-1  NUBS</text>
+<line x1="922.0" y1="244.0" x2="976.0" y2="244.0" stroke="#009e73" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="8 5"/>
+<text x="988.0" y="248.0" text-anchor="start" font-size="12" font-weight="700" fill="#009e73" letter-spacing="0">M-1  UBS online solve</text>
+<rect x="443.0" y="660.0" width="762.0" height="48.0" rx="8.0" ry="8.0" fill="#eef6fb" stroke="#0072b2" stroke-width="1.1"/>
+<text x="824.0" y="690.0" text-anchor="middle" font-size="14" font-weight="700" fill="#17202a" letter-spacing="0">For the same M and s:  NUBS solves M+2s-1 control-point unknowns; MINCO constructs 2Ms polynomial coefficients.</text>
+</svg>

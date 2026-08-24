@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="760" viewBox="0 0 1800 760">
+<defs>
+<marker id="arrow-gray" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 10 4 L 0 8 z" fill="#697586"/>
+</marker>
+<marker id="arrow-green" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 10 4 L 0 8 z" fill="#009e73"/>
+</marker>
+</defs>
+<style>
+text { font-family: Inter, Helvetica Neue, Arial, sans-serif; }
+.panel-title { font-weight: 700; }
+</style>
+<rect x="0" y="0" width="1800" height="760" fill="#ffffff"/>
+<text x="900.0" y="48.0" text-anchor="middle" font-size="29" font-weight="800" fill="#17202a" letter-spacing="0">Optimization Variable Comparison</text>
+<text x="900.0" y="80.0" text-anchor="middle" font-size="16" font-weight="500" fill="#52616f" letter-spacing="0">NUBSTrajectory keeps the MINCO decision variables (q, T); B-spline control points are internal construction variables.</text>
+<line x1="698.0" y1="112.0" x2="1668.0" y2="112.0" stroke="#009e73" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="698.0" y1="112.0" x2="698.0" y2="130.0" stroke="#009e73" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="1668.0" y1="112.0" x2="1668.0" y2="130.0" stroke="#009e73" stroke-width="2.0" stroke-linecap="round"/>
+<text x="1183.0" y="102.0" text-anchor="middle" font-size="14" font-weight="700" fill="#009e73" letter-spacing="0">same optimizer-facing variables: q and T</text>
+<rect x="72.0" y="148.0" width="524.0" height="540.0" rx="10.0" ry="10.0" fill="#fbfcfe" stroke="#d6dde6" stroke-width="1.2"/>
+<rect x="638.0" y="148.0" width="524.0" height="540.0" rx="10.0" ry="10.0" fill="#fbfcfe" stroke="#d6dde6" stroke-width="1.2"/>
+<rect x="1204.0" y="148.0" width="524.0" height="540.0" rx="10.0" ry="10.0" fill="#fbfcfe" stroke="#d6dde6" stroke-width="1.2"/>
+<text x="334.0" y="184.0" text-anchor="middle" font-size="24" font-weight="700" fill="#17202a" letter-spacing="0">Traditional B-spline planner</text>
+<text x="334.0" y="210.0" text-anchor="middle" font-size="14" font-weight="500" fill="#52616f" letter-spacing="0">control points -&gt; trajectory</text>
+<rect x="114.0" y="227.0" width="440.0" height="86.0" rx="8.0" ry="8.0" fill="#fff4eb" stroke="#d55e00" stroke-width="1.6"/>
+<text x="132.0" y="252.0" text-anchor="start" font-size="11" font-weight="700" fill="#d55e00" letter-spacing="0">OPTIMIZED VARIABLES</text>
+<text x="334.0" y="281.0" text-anchor="middle" font-size="20" font-weight="700" fill="#17202a"><tspan x="334.0" dy="0">B-spline control points</tspan><tspan x="334.0" dy="25">C</tspan></text>
+<line x1="334.0" y1="315.0" x2="334.0" y2="351.0" stroke="#697586" stroke-width="1.7" stroke-linecap="round" marker-end="url(#arrow-gray)"/>
+<rect x="114.0" y="361.0" width="440.0" height="176.0" rx="8.0" ry="8.0" fill="#ffffff" stroke="#d6dde6" stroke-width="1.2"/>
+<text x="132.0" y="388.0" text-anchor="start" font-size="12" font-weight="600" fill="#52616f" letter-spacing="0">control polygon is optimized directly</text>
+<polyline points="154.0,489.0 210.0,425.0 274.0,463.0 338.0,403.0 400.0,459.0 468.0,420.0 534.0,479.0" fill="none" stroke="#d55e00" stroke-width="1.9" stroke-dasharray="7 5" stroke-linejoin="round"/>
+<path d="M 154.0 489.0 C 200.0 456.0, 239.0 441.0, 282.0 452.0 S 367.0 463.0, 412.0 443.0 S 488.0 438.0, 538.0 472.0" fill="none" stroke="#0072b2" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="154.0" cy="489.0" r="6.0" fill="#d55e00" stroke="#ffffff" stroke-width="1.2"/>
+<circle cx="210.0" cy="425.0" r="6.0" fill="#d55e00" stroke="#ffffff" stroke-width="1.2"/>
+<circle cx="274.0" cy="463.0" r="6.0" fill="#d55e00" stroke="#ffffff" stroke-width="1.2"/>
+<circle cx="338.0" cy="403.0" r="6.0" fill="#d55e00" stroke="#ffffff" stroke-width="1.2"/>
+<circle cx="400.0" cy="459.0" r="6.0" fill="#d55e00" stroke="#ffffff" stroke-width="1.2"/>
+<circle cx="468.0" cy="420.0" r="6.0" fill="#d55e00" stroke="#ffffff" stroke-width="1.2"/>
+<circle cx="534.0" cy="479.0" r="6.0" fill="#d55e00" stroke="#ffffff" stroke-width="1.2"/>
+<text x="175.0" y="512.0" text-anchor="middle" font-size="13" font-weight="700" fill="#d55e00" letter-spacing="0">C_i</text>
+<text x="529.0" y="472.0" text-anchor="end" font-size="14" font-weight="700" fill="#0072b2" letter-spacing="0">p(t)</text>
+<line x1="334.0" y1="549.0" x2="334.0" y2="585.0" stroke="#697586" stroke-width="1.7" stroke-linecap="round" marker-end="url(#arrow-gray)"/>
+<rect x="114.0" y="594.0" width="440.0" height="74.0" rx="8.0" ry="8.0" fill="#eef6fb" stroke="#0072b2" stroke-width="1.5"/>
+<text x="334.0" y="624.0" text-anchor="middle" font-size="17" font-weight="700" fill="#17202a"><tspan x="334.0" dy="0">B-spline trajectory</tspan><tspan x="334.0" dy="23">from free control points</tspan></text>
+<text x="900.0" y="184.0" text-anchor="middle" font-size="24" font-weight="700" fill="#17202a" letter-spacing="0">MINCO</text>
+<text x="900.0" y="210.0" text-anchor="middle" font-size="14" font-weight="500" fill="#52616f" letter-spacing="0">(q, T) -&gt; polynomial trajectory</text>
+<rect x="680.0" y="227.0" width="440.0" height="86.0" rx="8.0" ry="8.0" fill="#eaf7f2" stroke="#009e73" stroke-width="1.6"/>
+<text x="698.0" y="252.0" text-anchor="start" font-size="11" font-weight="700" fill="#009e73" letter-spacing="0">OPTIMIZED VARIABLES</text>
+<text x="900.0" y="281.0" text-anchor="middle" font-size="20" font-weight="700" fill="#17202a"><tspan x="900.0" dy="0">waypoints q</tspan><tspan x="900.0" dy="25">segment times T</tspan></text>
+<line x1="900.0" y1="315.0" x2="900.0" y2="351.0" stroke="#009e73" stroke-width="1.7" stroke-linecap="round" marker-end="url(#arrow-green)"/>
+<rect x="680.0" y="361.0" width="440.0" height="104.0" rx="8.0" ry="8.0" fill="#ffffff" stroke="#d6dde6" stroke-width="1.2"/>
+<text x="900.0" y="393.0" text-anchor="middle" font-size="17" font-weight="700" fill="#17202a" letter-spacing="0">piecewise polynomial construction</text>
+<text x="900.0" y="421.0" text-anchor="middle" font-size="13" font-weight="500" fill="#52616f" letter-spacing="0">minimum-control-effort coefficients</text>
+<rect x="717.0" y="433.0" width="94.0" height="30.0" rx="15.0" ry="15.0" fill="#eaf7f2" stroke="#009e73" stroke-width="1.3"/>
+<text x="764.0" y="453.0" text-anchor="middle" font-size="13" font-weight="700" fill="#009e73" letter-spacing="0">q, T</text>
+<line x1="822.0" y1="448.0" x2="928.0" y2="448.0" stroke="#697586" stroke-width="1.6" stroke-linecap="round" marker-end="url(#arrow-gray)"/>
+<rect x="942.0" y="433.0" width="142.0" height="30.0" rx="15.0" ry="15.0" fill="#f4f6f8" stroke="#697586" stroke-width="1.3"/>
+<text x="1013.0" y="453.0" text-anchor="middle" font-size="13" font-weight="700" fill="#697586" letter-spacing="0">polynomial</text>
+<line x1="900.0" y1="477.0" x2="900.0" y2="514.0" stroke="#697586" stroke-width="1.7" stroke-linecap="round" marker-end="url(#arrow-gray)"/>
+<rect x="680.0" y="523.0" width="440.0" height="88.0" rx="8.0" ry="8.0" fill="#eef6fb" stroke="#0072b2" stroke-width="1.5"/>
+<path d="M 722.0 581.0 C 775.0 541.0, 812.0 548.0, 859.0 570.0 C 904.0 591.0, 942.0 540.0, 993.0 562.0 C 1035.0 580.0, 1061.0 582.0, 1106.0 550.0" fill="none" stroke="#0072b2" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="722.0" cy="581.0" r="4.8" fill="#009e73" stroke="#ffffff" stroke-width="1.2"/>
+<circle cx="859.0" cy="570.0" r="4.8" fill="#009e73" stroke="#ffffff" stroke-width="1.2"/>
+<circle cx="993.0" cy="562.0" r="4.8" fill="#009e73" stroke="#ffffff" stroke-width="1.2"/>
+<circle cx="1106.0" cy="550.0" r="4.8" fill="#009e73" stroke="#ffffff" stroke-width="1.2"/>
+<text x="900.0" y="629.0" text-anchor="middle" font-size="17" font-weight="700" fill="#17202a"><tspan x="900.0" dy="0">polynomial minimum-control-effort</tspan><tspan x="900.0" dy="23">trajectory</tspan></text>
+<text x="1466.0" y="184.0" text-anchor="middle" font-size="24" font-weight="700" fill="#17202a" letter-spacing="0">NUBSTrajectory</text>
+<text x="1466.0" y="210.0" text-anchor="middle" font-size="14" font-weight="500" fill="#52616f" letter-spacing="0">(q, T) -&gt; A(T) C = b(q) -&gt; NUBS</text>
+<rect x="1246.0" y="227.0" width="440.0" height="86.0" rx="8.0" ry="8.0" fill="#eaf7f2" stroke="#009e73" stroke-width="1.6"/>
+<text x="1264.0" y="252.0" text-anchor="start" font-size="11" font-weight="700" fill="#009e73" letter-spacing="0">OPTIMIZED VARIABLES</text>
+<text x="1668.0" y="252.0" text-anchor="end" font-size="11" font-weight="600" fill="#009e73" letter-spacing="0">same as MINCO</text>
+<text x="1466.0" y="281.0" text-anchor="middle" font-size="20" font-weight="700" fill="#17202a"><tspan x="1466.0" dy="0">waypoints q</tspan><tspan x="1466.0" dy="25">segment times T</tspan></text>
+<line x1="1466.0" y1="315.0" x2="1466.0" y2="351.0" stroke="#009e73" stroke-width="1.7" stroke-linecap="round" marker-end="url(#arrow-green)"/>
+<rect x="1246.0" y="361.0" width="440.0" height="112.0" rx="8.0" ry="8.0" fill="#ffffff" stroke="#d6dde6" stroke-width="1.2"/>
+<text x="1466.0" y="398.0" text-anchor="middle" font-size="25" font-weight="700" fill="#17202a" letter-spacing="0" font-family="Cambria Math, STIX Two Math, Times New Roman, serif">A(T) C = b(q)</text>
+<text x="1466.0" y="427.0" text-anchor="middle" font-size="13" font-weight="500" fill="#52616f" letter-spacing="0">structured NUBS construction system</text>
+<rect x="1350.0" y="441.0" width="232.0" height="28.0" rx="14.0" ry="14.0" fill="#f4f6f8" stroke="#697586" stroke-width="1.1" stroke-dasharray="5 4"/>
+<text x="1466.0" y="460.0" text-anchor="middle" font-size="12" font-weight="700" fill="#697586" letter-spacing="0">C is recovered, not optimized</text>
+<line x1="1466.0" y1="485.0" x2="1466.0" y2="521.0" stroke="#697586" stroke-width="1.7" stroke-linecap="round" marker-end="url(#arrow-gray)"/>
+<rect x="1246.0" y="530.0" width="440.0" height="102.0" rx="8.0" ry="8.0" fill="#eef6fb" stroke="#0072b2" stroke-width="1.5"/>
+<polyline points="1286.0,584.0 1344.0,550.0 1398.0,574.0 1464.0,547.0 1533.0,566.0 1598.0,554.0 1672.0,578.0" fill="none" stroke="#697586" stroke-width="1.5" stroke-dasharray="5 5" stroke-linejoin="round" opacity="0.75"/>
+<circle cx="1286.0" cy="584.0" r="3.7" fill="#697586" stroke="#ffffff" stroke-width="1.0"/>
+<circle cx="1344.0" cy="550.0" r="3.7" fill="#697586" stroke="#ffffff" stroke-width="1.0"/>
+<circle cx="1398.0" cy="574.0" r="3.7" fill="#697586" stroke="#ffffff" stroke-width="1.0"/>
+<circle cx="1464.0" cy="547.0" r="3.7" fill="#697586" stroke="#ffffff" stroke-width="1.0"/>
+<circle cx="1533.0" cy="566.0" r="3.7" fill="#697586" stroke="#ffffff" stroke-width="1.0"/>
+<circle cx="1598.0" cy="554.0" r="3.7" fill="#697586" stroke="#ffffff" stroke-width="1.0"/>
+<circle cx="1672.0" cy="578.0" r="3.7" fill="#697586" stroke="#ffffff" stroke-width="1.0"/>
+<path d="M 1288.0 583.0 C 1340.0 559.0, 1384.0 562.0, 1429.0 570.0 S 1514.0 564.0, 1561.0 564.0 S 1624.0 564.0, 1673.0 576.0" fill="none" stroke="#0072b2" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="1312.0" y="546.0" text-anchor="middle" font-size="12" font-weight="700" fill="#697586" letter-spacing="0">derived C</text>
+<text x="1466.0" y="607.0" text-anchor="middle" font-size="16" font-weight="700" fill="#17202a"><tspan x="1466.0" dy="0">NUBS minimum-control-effort</tspan><tspan x="1466.0" dy="21">trajectory</tspan></text>
+<rect x="1262.0" y="642.0" width="408.0" height="36.0" rx="8.0" ry="8.0" fill="#fffafa" stroke="#b23b3b" stroke-width="1.2"/>
+<text x="1466.0" y="666.0" text-anchor="middle" font-size="13" font-weight="700" fill="#b23b3b" letter-spacing="0">optimizer variables are q and T, not C</text>
+<text x="900.0" y="732.0" text-anchor="middle" font-size="13" font-weight="500" fill="#52616f" letter-spacing="0">Decision variables are those exposed to the outer optimizer; construction variables are solved inside each trajectory parameterization.</text>
+</svg>

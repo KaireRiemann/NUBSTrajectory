@@ -211,10 +211,26 @@ int main()
     Eigen::Vector3d vel = traj.evaluate(t, 1);
     Eigen::Vector3d acc = traj.evaluate(t, 2);
     Eigen::Vector3d jerk = traj.evaluate(t, 3);
+    Eigen::Vector3d snap = traj.evaluate(t, 4);
+
+    // Direct aliases are also available.
+    pos = traj.getPos(t);
+    vel = traj.getVel(t);
+    acc = traj.getAcc(t);
+    jerk = traj.getJerk(t);
+    snap = traj.getSnap(t);
     double energy = traj.getEnergy();
 
     return 0;
 }
+```
+
+For the dedicated uniform-time path, the polynomial evaluation cache also
+supports batched derivative evaluation up to snap:
+
+```cpp
+Eigen::Vector3d p, v, a, j, snap;
+uniform_traj.evaluatePVAJS(t, p, v, a, j, snap);
 ```
 
 ## Tests

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="470" viewBox="0 0 1320 470">
+<defs>
+<marker id="arrow-gray" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 10 4 L 0 8 z" fill="#697586"/>
+</marker>
+<marker id="arrow-green" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 10 4 L 0 8 z" fill="#009e73"/>
+</marker>
+</defs>
+<style>
+text { font-family: Inter, Helvetica Neue, Arial, sans-serif; }
+.panel-title { font-weight: 700; }
+</style>
+<rect x="0" y="0" width="1320" height="470" fill="#ffffff"/>
+<rect x="350.0" y="10.0" width="620.0" height="34.0" rx="4.0" ry="4.0" fill="#ffffff" stroke="#d6dde6" stroke-width="0.9"/>
+<line x1="378.0" y1="28.0" x2="424.0" y2="28.0" stroke="#009e73" stroke-width="2.5" stroke-linecap="round"/>
+<text x="436.0" y="32.0" text-anchor="start" font-size="12" font-weight="700" fill="#009e73" letter-spacing="0">optimized</text>
+<line x1="528.0" y1="28.0" x2="574.0" y2="28.0" stroke="#697586" stroke-width="2.5" stroke-linecap="round"/>
+<text x="586.0" y="32.0" text-anchor="start" font-size="12" font-weight="700" fill="#697586" letter-spacing="0">internal</text>
+<line x1="678.0" y1="28.0" x2="724.0" y2="28.0" stroke="#d55e00" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="7 5"/>
+<text x="736.0" y="32.0" text-anchor="start" font-size="12" font-weight="700" fill="#d55e00" letter-spacing="0">control points</text>
+<line x1="828.0" y1="28.0" x2="874.0" y2="28.0" stroke="#0072b2" stroke-width="2.5" stroke-linecap="round"/>
+<text x="886.0" y="32.0" text-anchor="start" font-size="12" font-weight="700" fill="#0072b2" letter-spacing="0">trajectory</text>
+<line x1="514.3" y1="58.0" x2="1221.0" y2="58.0" stroke="#009e73" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="514.3" y1="58.0" x2="514.3" y2="68.0" stroke="#009e73" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="1221.0" y1="58.0" x2="1221.0" y2="68.0" stroke="#009e73" stroke-width="2.0" stroke-linecap="round"/>
+<text x="867.7" y="51.0" text-anchor="middle" font-size="12" font-weight="700" fill="#009e73" letter-spacing="0">same opt. vars</text>
+<rect x="54.0" y="70.0" width="381.3" height="318.0" rx="6.0" ry="6.0" fill="#fbfcfe" stroke="#d6dde6" stroke-width="1.0"/>
+<rect x="469.3" y="70.0" width="381.3" height="318.0" rx="6.0" ry="6.0" fill="#fbfcfe" stroke="#d6dde6" stroke-width="1.0"/>
+<rect x="884.7" y="70.0" width="381.3" height="318.0" rx="6.0" ry="6.0" fill="#fbfcfe" stroke="#d6dde6" stroke-width="1.0"/>
+<text x="72.0" y="98.0" text-anchor="start" font-size="15" font-weight="800" fill="#17202a" letter-spacing="0">(a) B-spline</text>
+<rect x="108.0" y="126.0" width="273.3" height="54.0" rx="6.0" ry="6.0" fill="#fff4eb" stroke="#d55e00" stroke-width="1.2"/>
+<text x="244.7" y="160.0" text-anchor="middle" font-size="21" font-weight="800" fill="#d55e00" letter-spacing="0" font-family="Cambria Math, STIX Two Math, Times New Roman, serif">C</text>
+<line x1="244.7" y1="184.0" x2="244.7" y2="214.0" stroke="#697586" stroke-width="1.7" stroke-linecap="round" marker-end="url(#arrow-gray)"/>
+<rect x="108.0" y="220.0" width="273.3" height="58.0" rx="6.0" ry="6.0" fill="#fff4eb" stroke="#d55e00" stroke-width="1.1"/>
+<text x="244.7" y="256.0" text-anchor="middle" font-size="18" font-weight="800" fill="#d55e00" letter-spacing="0" font-family="Cambria Math, STIX Two Math, Times New Roman, serif">C -&gt; p(t)</text>
+<line x1="244.7" y1="282.0" x2="244.7" y2="312.0" stroke="#697586" stroke-width="1.7" stroke-linecap="round" marker-end="url(#arrow-gray)"/>
+<polyline points="110.0,386.0 158.0,344.0 210.0,367.0 270.0,339.0 336.0,376.0 400.0,352.0" fill="none" stroke="#d55e00" stroke-width="1.4" stroke-dasharray="6 5" stroke-linejoin="round"/>
+<circle cx="110.0" cy="386.0" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="1.2"/>
+<circle cx="158.0" cy="344.0" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="1.2"/>
+<circle cx="210.0" cy="367.0" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="1.2"/>
+<circle cx="270.0" cy="339.0" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="1.2"/>
+<circle cx="336.0" cy="376.0" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="1.2"/>
+<circle cx="400.0" cy="352.0" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="1.2"/>
+<path d="M 110.0 386.0 C 156.0 359.0, 199.0 356.0, 239.0 364.0 S 316.0 368.0, 401.0 359.0" fill="none" stroke="#0072b2" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="244.7" y="368.0" text-anchor="middle" font-size="16" font-weight="800" fill="#0072b2" letter-spacing="0" font-family="Cambria Math, STIX Two Math, Times New Roman, serif">p(t)</text>
+<text x="487.3" y="98.0" text-anchor="start" font-size="15" font-weight="800" fill="#17202a" letter-spacing="0">(b) MINCO</text>
+<rect x="523.3" y="126.0" width="273.3" height="54.0" rx="6.0" ry="6.0" fill="#eaf7f2" stroke="#009e73" stroke-width="1.2"/>
+<text x="660.0" y="160.0" text-anchor="middle" font-size="21" font-weight="800" fill="#009e73" letter-spacing="0" font-family="Cambria Math, STIX Two Math, Times New Roman, serif">(q,T)</text>
+<line x1="660.0" y1="184.0" x2="660.0" y2="214.0" stroke="#009e73" stroke-width="1.7" stroke-linecap="round" marker-end="url(#arrow-green)"/>
+<rect x="523.3" y="220.0" width="273.3" height="58.0" rx="6.0" ry="6.0" fill="#f4f6f8" stroke="#697586" stroke-width="1.1"/>
+<text x="660.0" y="256.0" text-anchor="middle" font-size="18" font-weight="800" fill="#697586" letter-spacing="0" font-family="Cambria Math, STIX Two Math, Times New Roman, serif">coeff.</text>
+<line x1="660.0" y1="282.0" x2="660.0" y2="312.0" stroke="#697586" stroke-width="1.7" stroke-linecap="round" marker-end="url(#arrow-gray)"/>
+<path d="M 525.3 386.0 C 571.3 359.0, 614.3 356.0, 654.3 364.0 S 731.3 368.0, 816.3 359.0" fill="none" stroke="#0072b2" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="660.0" y="368.0" text-anchor="middle" font-size="16" font-weight="800" fill="#0072b2" letter-spacing="0" font-family="Cambria Math, STIX Two Math, Times New Roman, serif">p(t)</text>
+<text x="902.7" y="98.0" text-anchor="start" font-size="15" font-weight="800" fill="#17202a" letter-spacing="0">(c) NUBS</text>
+<rect x="938.7" y="126.0" width="273.3" height="54.0" rx="6.0" ry="6.0" fill="#eaf7f2" stroke="#009e73" stroke-width="1.2"/>
+<text x="1075.3" y="160.0" text-anchor="middle" font-size="21" font-weight="800" fill="#009e73" letter-spacing="0" font-family="Cambria Math, STIX Two Math, Times New Roman, serif">(q,T)</text>
+<line x1="1075.3" y1="184.0" x2="1075.3" y2="214.0" stroke="#009e73" stroke-width="1.7" stroke-linecap="round" marker-end="url(#arrow-green)"/>
+<rect x="938.7" y="220.0" width="273.3" height="58.0" rx="6.0" ry="6.0" fill="#f4f6f8" stroke="#697586" stroke-width="1.1" stroke-dasharray="5 4"/>
+<text x="1075.3" y="256.0" text-anchor="middle" font-size="18" font-weight="800" fill="#697586" letter-spacing="0" font-family="Cambria Math, STIX Two Math, Times New Roman, serif">A(T)C=b(q)</text>
+<text x="1194.0" y="270.0" text-anchor="middle" font-size="12" font-weight="800" fill="#697586" letter-spacing="0" font-family="Cambria Math, STIX Two Math, Times New Roman, serif">C</text>
+<line x1="1075.3" y1="282.0" x2="1075.3" y2="312.0" stroke="#697586" stroke-width="1.7" stroke-linecap="round" marker-end="url(#arrow-gray)"/>
+<path d="M 940.7 386.0 C 986.7 359.0, 1029.7 356.0, 1069.7 364.0 S 1146.7 368.0, 1231.7 359.0" fill="none" stroke="#0072b2" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="1075.3" y="368.0" text-anchor="middle" font-size="16" font-weight="800" fill="#0072b2" letter-spacing="0" font-family="Cambria Math, STIX Two Math, Times New Roman, serif">p(t)</text>
+</svg>

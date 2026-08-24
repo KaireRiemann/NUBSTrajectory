@@ -492,6 +492,46 @@ inline void checkUniformTimeOne(const unsigned int seed)
                           "uniform waypoint");
     }
 
+    for (int i = 0; i <= 20; ++i)
+    {
+        double t = total_duration * static_cast<double>(i) / 20.0;
+        if (i == 20)
+        {
+            t = previousTime(total_duration);
+        }
+
+        Eigen::Matrix<double, Dim, 1> pos;
+        Eigen::Matrix<double, Dim, 1> vel;
+        Eigen::Matrix<double, Dim, 1> acc;
+        Eigen::Matrix<double, Dim, 1> jerk;
+        Eigen::Matrix<double, Dim, 1> snap;
+        uniform.evaluatePVAJS(t, pos, vel, acc, jerk, snap);
+
+        requireMatrixNear(pos, uniform.evaluate(t, 0),
+                          1.0e-8, 1.0e-8, "uniform PVAJS position");
+        requireMatrixNear(vel, uniform.evaluate(t, 1),
+                          1.0e-8, 1.0e-8, "uniform PVAJS velocity");
+        requireMatrixNear(acc, uniform.evaluate(t, 2),
+                          1.0e-8, 1.0e-8, "uniform PVAJS acceleration");
+        requireMatrixNear(jerk, uniform.evaluate(t, 3),
+                          1.0e-8, 1.0e-8, "uniform PVAJS jerk");
+        requireMatrixNear(snap, uniform.evaluate(t, 4),
+                          1.0e-8, 1.0e-8, "uniform PVAJS snap");
+
+        requireMatrixNear(uniform.getPos(t), pos,
+                          1.0e-8, 1.0e-8, "uniform getPos");
+        requireMatrixNear(uniform.getVel(t), vel,
+                          1.0e-8, 1.0e-8, "uniform getVel");
+        requireMatrixNear(uniform.getAcc(t), acc,
+                          1.0e-8, 1.0e-8, "uniform getAcc");
+        requireMatrixNear(uniform.getJer(t), jerk,
+                          1.0e-8, 1.0e-8, "uniform getJer");
+        requireMatrixNear(uniform.getJerk(t), jerk,
+                          1.0e-8, 1.0e-8, "uniform getJerk");
+        requireMatrixNear(uniform.getSnap(t), snap,
+                          1.0e-8, 1.0e-8, "uniform getSnap");
+    }
+
     double uniform_cost = 0.0;
     Eigen::MatrixXd uniform_gp;
     double uniform_gtotal = 0.0;

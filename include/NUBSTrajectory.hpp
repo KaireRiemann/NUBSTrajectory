@@ -3,6 +3,7 @@
 
 #include <Eigen/Dense>
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <map>
@@ -1054,6 +1055,10 @@ public:
     inline Eigen::Matrix<double, Dim, 1> evaluate(double t,
                                                   const int d_ord = 0) const
     {
+        if (d_ord > p)
+        {
+            return Eigen::Matrix<double, Dim, 1>::Zero();
+        }
         if (t <= 0.0)
         {
             t = 0.0;
@@ -1074,6 +1079,74 @@ public:
             res += ders(d_ord, j) * control_points.row(span - p + j).transpose();
         }
         return res;
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getDerivative(
+        const double t,
+        const int derivative) const
+    {
+        return evaluate(t, derivative);
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getPos(const double t) const
+    {
+        return evaluate(t, 0);
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getVel(const double t) const
+    {
+        return evaluate(t, 1);
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getAcc(const double t) const
+    {
+        return evaluate(t, 2);
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getJer(const double t) const
+    {
+        return evaluate(t, 3);
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getJerk(const double t) const
+    {
+        return getJer(t);
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getSnap(const double t) const
+    {
+        return evaluate(t, 4);
+    }
+
+    inline void evaluatePVA(double t,
+                            Eigen::Matrix<double, Dim, 1> &pos,
+                            Eigen::Matrix<double, Dim, 1> &vel,
+                            Eigen::Matrix<double, Dim, 1> &acc) const
+    {
+        pos = evaluate(t, 0);
+        vel = evaluate(t, 1);
+        acc = evaluate(t, 2);
+    }
+
+    inline void evaluatePVAJ(double t,
+                             Eigen::Matrix<double, Dim, 1> &pos,
+                             Eigen::Matrix<double, Dim, 1> &vel,
+                             Eigen::Matrix<double, Dim, 1> &acc,
+                             Eigen::Matrix<double, Dim, 1> &jerk) const
+    {
+        evaluatePVA(t, pos, vel, acc);
+        jerk = evaluate(t, 3);
+    }
+
+    inline void evaluatePVAJS(double t,
+                              Eigen::Matrix<double, Dim, 1> &pos,
+                              Eigen::Matrix<double, Dim, 1> &vel,
+                              Eigen::Matrix<double, Dim, 1> &acc,
+                              Eigen::Matrix<double, Dim, 1> &jerk,
+                              Eigen::Matrix<double, Dim, 1> &snap) const
+    {
+        evaluatePVAJ(t, pos, vel, acc, jerk);
+        snap = evaluate(t, 4);
     }
 
     inline double getEnergyForKnots(const Eigen::VectorXd &u_vec) const
@@ -2047,6 +2120,10 @@ public:
     inline Eigen::Matrix<double, Dim, 1> evaluate(double t,
                                                   const int d_ord = 0) const
     {
+        if (d_ord > P)
+        {
+            return Eigen::Matrix<double, Dim, 1>::Zero();
+        }
         if (t <= 0.0)
         {
             t = 0.0;
@@ -2068,6 +2145,74 @@ public:
                    this->control_points.row(span - P + j).transpose();
         }
         return res;
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getDerivative(
+        const double t,
+        const int derivative) const
+    {
+        return evaluate(t, derivative);
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getPos(const double t) const
+    {
+        return evaluate(t, 0);
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getVel(const double t) const
+    {
+        return evaluate(t, 1);
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getAcc(const double t) const
+    {
+        return evaluate(t, 2);
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getJer(const double t) const
+    {
+        return evaluate(t, 3);
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getJerk(const double t) const
+    {
+        return getJer(t);
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getSnap(const double t) const
+    {
+        return evaluate(t, 4);
+    }
+
+    inline void evaluatePVA(double t,
+                            Eigen::Matrix<double, Dim, 1> &pos,
+                            Eigen::Matrix<double, Dim, 1> &vel,
+                            Eigen::Matrix<double, Dim, 1> &acc) const
+    {
+        pos = evaluate(t, 0);
+        vel = evaluate(t, 1);
+        acc = evaluate(t, 2);
+    }
+
+    inline void evaluatePVAJ(double t,
+                             Eigen::Matrix<double, Dim, 1> &pos,
+                             Eigen::Matrix<double, Dim, 1> &vel,
+                             Eigen::Matrix<double, Dim, 1> &acc,
+                             Eigen::Matrix<double, Dim, 1> &jerk) const
+    {
+        evaluatePVA(t, pos, vel, acc);
+        jerk = evaluate(t, 3);
+    }
+
+    inline void evaluatePVAJS(double t,
+                              Eigen::Matrix<double, Dim, 1> &pos,
+                              Eigen::Matrix<double, Dim, 1> &vel,
+                              Eigen::Matrix<double, Dim, 1> &acc,
+                              Eigen::Matrix<double, Dim, 1> &jerk,
+                              Eigen::Matrix<double, Dim, 1> &snap) const
+    {
+        evaluatePVAJ(t, pos, vel, acc, jerk);
+        snap = evaluate(t, 4);
     }
 
     inline double getEnergyForKnots(const Eigen::VectorXd &u_vec) const
@@ -2805,6 +2950,33 @@ private:
         uniformPolyCacheValid_ = true;
     }
 
+    inline std::array<Eigen::Matrix<double, Dim, 1>, 5>
+    evaluateCachedDerivativesToSnap(double t) const
+    {
+        std::array<Eigen::Matrix<double, Dim, 1>, 5> values;
+        for (auto &value : values)
+        {
+            value.setZero();
+        }
+
+        double tau = 0.0;
+        const int piece = locateUniformPiece(t, tau);
+        const auto &coeffs = uniformPolyCoeffs_[piece];
+
+        values[0] = coeffs.row(P).transpose();
+        for (int k = P - 1; k >= 0; --k)
+        {
+            for (int d = 4; d >= 1; --d)
+            {
+                values[d] =
+                    tau * values[d] +
+                    static_cast<double>(d) * values[d - 1];
+            }
+            values[0] = tau * values[0] + coeffs.row(k).transpose();
+        }
+        return values;
+    }
+
 public:
     static constexpr int SystemOrder = S;
     static constexpr int Degree = P;
@@ -2912,6 +3084,10 @@ public:
     inline Eigen::Matrix<double, Dim, 1> evaluate(double t,
                                                   const int d_ord = 0) const
     {
+        if (d_ord > P)
+        {
+            return Eigen::Matrix<double, Dim, 1>::Zero();
+        }
         if (uniformPolyCacheValid_ && d_ord <= P)
         {
             double tau = 0.0;
@@ -2968,55 +3144,90 @@ public:
                             Eigen::Matrix<double, Dim, 1> &vel,
                             Eigen::Matrix<double, Dim, 1> &acc) const
     {
-        if (uniformPolyCacheValid_)
+        if (!uniformPolyCacheValid_)
         {
-            double tau = 0.0;
-            const int piece = locateUniformPiece(t, tau);
-            const auto &coeffs = uniformPolyCoeffs_[piece];
-
-            pos = coeffs.row(P).transpose();
-            for (int k = P - 1; k >= 0; --k)
-            {
-                pos = tau * pos + coeffs.row(k).transpose();
-            }
-
-            vel = static_cast<double>(P) * coeffs.row(P).transpose();
-            for (int k = P - 1; k >= 1; --k)
-            {
-                vel = tau * vel +
-                      static_cast<double>(k) * coeffs.row(k).transpose();
-            }
-
-            acc = static_cast<double>(P * (P - 1)) *
-                  coeffs.row(P).transpose();
-            for (int k = P - 1; k >= 2; --k)
-            {
-                acc = tau * acc +
-                      static_cast<double>(k * (k - 1)) *
-                          coeffs.row(k).transpose();
-            }
-            return;
+            prepareEvaluationCache();
         }
 
-        prepareEvaluationCache();
-        evaluatePVA(t, pos, vel, acc);
-        return;
+        const auto values = evaluateCachedDerivativesToSnap(t);
+        pos = values[0];
+        vel = values[1];
+        acc = values[2];
+    }
 
-        const int span = findUniformSpan(t);
-        Eigen::Matrix<double, P + 1, P + 1> ders;
-        this->dersBasisFuns(std::min(2, P), span, t, this->knots, ders);
-
-        pos.setZero();
-        vel.setZero();
-        acc.setZero();
-        for (int j = 0; j <= P; ++j)
+    inline void evaluatePVAJ(double t,
+                             Eigen::Matrix<double, Dim, 1> &pos,
+                             Eigen::Matrix<double, Dim, 1> &vel,
+                             Eigen::Matrix<double, Dim, 1> &acc,
+                             Eigen::Matrix<double, Dim, 1> &jerk) const
+    {
+        if (!uniformPolyCacheValid_)
         {
-            const Eigen::Matrix<double, Dim, 1> ctrl =
-                this->control_points.row(span - P + j).transpose();
-            pos += ders(0, j) * ctrl;
-            vel += ders(1, j) * ctrl;
-            acc += ders(2, j) * ctrl;
+            prepareEvaluationCache();
         }
+
+        const auto values = evaluateCachedDerivativesToSnap(t);
+        pos = values[0];
+        vel = values[1];
+        acc = values[2];
+        jerk = values[3];
+    }
+
+    inline void evaluatePVAJS(double t,
+                              Eigen::Matrix<double, Dim, 1> &pos,
+                              Eigen::Matrix<double, Dim, 1> &vel,
+                              Eigen::Matrix<double, Dim, 1> &acc,
+                              Eigen::Matrix<double, Dim, 1> &jerk,
+                              Eigen::Matrix<double, Dim, 1> &snap) const
+    {
+        if (!uniformPolyCacheValid_)
+        {
+            prepareEvaluationCache();
+        }
+
+        const auto values = evaluateCachedDerivativesToSnap(t);
+        pos = values[0];
+        vel = values[1];
+        acc = values[2];
+        jerk = values[3];
+        snap = values[4];
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getDerivative(
+        const double t,
+        const int derivative) const
+    {
+        return evaluate(t, derivative);
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getPos(const double t) const
+    {
+        return evaluate(t, 0);
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getVel(const double t) const
+    {
+        return evaluate(t, 1);
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getAcc(const double t) const
+    {
+        return evaluate(t, 2);
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getJer(const double t) const
+    {
+        return evaluate(t, 3);
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getJerk(const double t) const
+    {
+        return getJer(t);
+    }
+
+    inline Eigen::Matrix<double, Dim, 1> getSnap(const double t) const
+    {
+        return evaluate(t, 4);
     }
 
     inline void getEnergyAndFiniteDiffGrad(double &cost,

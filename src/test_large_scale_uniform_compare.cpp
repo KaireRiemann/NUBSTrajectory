@@ -353,6 +353,24 @@ void benchmarkUniformConstructionAndEvaluation(const int piece_num,
         },
         query_runs);
 
+    const auto nubs_eval_pvajs = nubs_test::measureQueries(
+        [&](const int i)
+        {
+            const double t = sample_time(i);
+            Eigen::Vector3d pos;
+            Eigen::Vector3d vel;
+            Eigen::Vector3d acc;
+            Eigen::Vector3d jerk;
+            Eigen::Vector3d snap;
+            nubs_traj.evaluatePVAJS(t, pos, vel, acc, jerk, snap);
+            volatile double sink =
+                pos.squaredNorm() + vel.squaredNorm() +
+                acc.squaredNorm() + jerk.squaredNorm() +
+                snap.squaredNorm();
+            (void)sink;
+        },
+        query_runs);
+
     const auto full_nubs_eval_pva = nubs_test::measureQueries(
         [&](const int i)
         {
@@ -366,6 +384,23 @@ void benchmarkUniformConstructionAndEvaluation(const int piece_num,
         },
         query_runs);
 
+    const auto full_nubs_eval_pvajs = nubs_test::measureQueries(
+        [&](const int i)
+        {
+            const double t = sample_time(i);
+            const Eigen::Vector3d pos = full_nubs_traj.evaluate(t, 0);
+            const Eigen::Vector3d vel = full_nubs_traj.evaluate(t, 1);
+            const Eigen::Vector3d acc = full_nubs_traj.evaluate(t, 2);
+            const Eigen::Vector3d jerk = full_nubs_traj.evaluate(t, 3);
+            const Eigen::Vector3d snap = full_nubs_traj.evaluate(t, 4);
+            volatile double sink =
+                pos.squaredNorm() + vel.squaredNorm() +
+                acc.squaredNorm() + jerk.squaredNorm() +
+                snap.squaredNorm();
+            (void)sink;
+        },
+        query_runs);
+
     const auto minco_eval_pva = nubs_test::measureQueries(
         [&](const int i)
         {
@@ -375,6 +410,23 @@ void benchmarkUniformConstructionAndEvaluation(const int piece_num,
             const Eigen::Vector3d acc = minco_traj.evaluate(t, 2);
             volatile double sink =
                 pos.squaredNorm() + vel.squaredNorm() + acc.squaredNorm();
+            (void)sink;
+        },
+        query_runs);
+
+    const auto minco_eval_pvajs = nubs_test::measureQueries(
+        [&](const int i)
+        {
+            const double t = sample_time(i);
+            const Eigen::Vector3d pos = minco_traj.evaluate(t, 0);
+            const Eigen::Vector3d vel = minco_traj.evaluate(t, 1);
+            const Eigen::Vector3d acc = minco_traj.evaluate(t, 2);
+            const Eigen::Vector3d jerk = minco_traj.evaluate(t, 3);
+            const Eigen::Vector3d snap = minco_traj.evaluate(t, 4);
+            volatile double sink =
+                pos.squaredNorm() + vel.squaredNorm() +
+                acc.squaredNorm() + jerk.squaredNorm() +
+                snap.squaredNorm();
             (void)sink;
         },
         query_runs);
@@ -406,12 +458,17 @@ void benchmarkUniformConstructionAndEvaluation(const int piece_num,
     nubs_test::printTiming("    full NUBS eval pva", full_nubs_eval_pva);
     nubs_test::printTiming("    MINCO eval pva", minco_eval_pva);
     nubs_test::printTiming("    large eval pva", large_eval_pva);
+    nubs_test::printTiming("    uniform NUBS eval pvajs", nubs_eval_pvajs);
+    nubs_test::printTiming("    full NUBS eval pvajs", full_nubs_eval_pvajs);
+    nubs_test::printTiming("    MINCO eval pvajs", minco_eval_pvajs);
     nubs_test::printSpeedup("    uniform NUBS vs MINCO construct speedup",
                             minco_construct, nubs_construct);
     nubs_test::printSpeedup("    uniform NUBS vs MINCO eval pos speedup",
                             minco_eval_pos, nubs_eval_pos);
     nubs_test::printSpeedup("    uniform NUBS vs MINCO eval pva speedup",
                             minco_eval_pva, nubs_eval_pva);
+    nubs_test::printSpeedup("    uniform NUBS vs MINCO eval pvajs speedup",
+                            minco_eval_pvajs, nubs_eval_pvajs);
 }
 
 void runLargeScaleUniformCompare()

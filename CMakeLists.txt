@@ -55,3 +55,15 @@ add_nubs_test(bench_finite_diff_s3_d3 src/bench_finite_diff_s3_d3.cpp)
 add_executable(bench_large_scale_construction src/bench_large_scale_construction.cpp)
 target_link_libraries(bench_large_scale_construction PRIVATE nubs_trajectory)
 target_compile_options(bench_large_scale_construction PRIVATE -Wall -Wextra -Wpedantic)
+
+add_executable(bench_nonuniform_construction src/bench_nonuniform_construction.cpp)
+target_link_libraries(bench_nonuniform_construction PRIVATE nubs_trajectory)
+target_compile_options(bench_nonuniform_construction PRIVATE -Wall -Wextra -Wpedantic)
+
+add_executable(bench_energy_gradient_validation src/bench_energy_gradient_validation.cpp)
+target_link_libraries(bench_energy_gradient_validation PRIVATE nubs_trajectory)
+target_compile_options(bench_energy_gradient_validation PRIVATE -Wall -Wextra -Wpedantic)
+
+add_executable(export_equivalence_figure_data src/export_equivalence_figure_data.cpp)
+target_link_libraries(export_equivalence_figure_data PRIVATE nubs_trajectory)
+target_compile_options(export_equivalence_figure_data PRIVATE -Wall -Wextra -Wpedantic)
