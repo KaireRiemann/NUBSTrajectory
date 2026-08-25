@@ -2,10 +2,15 @@
 #define NUBS_TRAJECTORY_HPP
 
 #include <Eigen/Dense>
+#include "nubs/banded_system.hpp"
+#include "nubs/basis.hpp"
+#include "nubs/dual.hpp"
+#include "nubs/timing_stencil.hpp"
 #include <algorithm>
 #include <array>
 #include <cassert>
 #include <cmath>
+#include <limits>
 #include <map>
 #include <stdexcept>
 #include <tuple>
@@ -14,171 +19,6 @@
 
 namespace nubs
 {
-
-class BandedSystem
-{
-private:
-    int N = 0;
-    int lowerBw = 0;
-    int upperBw = 0;
-    std::vector<double> data;
-
-public:
-    inline void create(const int &n, const int &p, const int &q)
-    {
-        if (N == n && lowerBw == p && upperBw == q)
-        {
-            std::fill(data.begin(), data.end(), 0.0);
-            return;
-        }
-
-        N = n;
-        lowerBw = p;
-        upperBw = q;
-        data.assign(N * (lowerBw + upperBw + 1), 0.0);
-    }
-
-    inline double &operator()(const int &i, const int &j)
-    {
-        return data[(i - j + upperBw) * N + j];
-    }
-
-    inline const double &operator()(const int &i, const int &j) const
-    {
-        return data[(i - j + upperBw) * N + j];
-    }
-
-    template <typename EIGENMAT>
-    inline EIGENMAT multiply(const EIGENMAT &x) const
-    {
-        EIGENMAT res = EIGENMAT::Zero(N, x.cols());
-        for (int i = 0; i < N; ++i)
-        {
-            const int j_start = std::max(0, i - lowerBw);
-            const int j_end = std::min(N - 1, i + upperBw);
-            for (int j = j_start; j <= j_end; ++j)
-            {
-                res.row(i) += operator()(i, j) * x.row(j);
-            }
-        }
-        return res;
-    }
-
-    template <typename EIGENMATX, typename EIGENMATY>
-    inline double dotMultiply(const EIGENMATX &x, const EIGENMATY &y) const
-    {
-        double res = 0.0;
-        for (int i = 0; i < N; ++i)
-        {
-            const int j_start = std::max(0, i - lowerBw);
-            const int j_end = std::min(N - 1, i + upperBw);
-            for (int j = j_start; j <= j_end; ++j)
-            {
-                res += operator()(i, j) * y.row(i).dot(x.row(j));
-            }
-        }
-        return res;
-    }
-
-    inline void factorizeLU()
-    {
-        int iM, jM;
-        double cVl;
-        for (int k = 0; k <= N - 2; ++k)
-        {
-            iM = std::min(k + lowerBw, N - 1);
-            cVl = operator()(k, k);
-            if (std::abs(cVl) < 1.0e-14)
-            {
-                throw std::runtime_error("BandedSystem::factorizeLU(): near-zero pivot.");
-            }
-            for (int i = k + 1; i <= iM; ++i)
-            {
-                if (operator()(i, k) != 0.0)
-                {
-                    operator()(i, k) /= cVl;
-                }
-            }
-            jM = std::min(k + upperBw, N - 1);
-            for (int j = k + 1; j <= jM; ++j)
-            {
-                cVl = operator()(k, j);
-                if (cVl != 0.0)
-                {
-                    for (int i = k + 1; i <= iM; ++i)
-                    {
-                        if (operator()(i, k) != 0.0)
-                        {
-                            operator()(i, j) -= operator()(i, k) * cVl;
-                        }
-                    }
-                }
-            }
-        }
-        if (N > 0 && std::abs(operator()(N - 1, N - 1)) < 1.0e-14)
-        {
-            throw std::runtime_error("BandedSystem::factorizeLU(): near-zero final pivot.");
-        }
-    }
-
-    template <typename EIGENMAT>
-    inline void solve(EIGENMAT &b) const
-    {
-        int iM;
-        for (int j = 0; j <= N - 1; ++j)
-        {
-            iM = std::min(j + lowerBw, N - 1);
-            for (int i = j + 1; i <= iM; ++i)
-            {
-                if (operator()(i, j) != 0.0)
-                {
-                    b.row(i) -= operator()(i, j) * b.row(j);
-                }
-            }
-        }
-        for (int j = N - 1; j >= 0; --j)
-        {
-            b.row(j) /= operator()(j, j);
-            iM = std::max(0, j - upperBw);
-            for (int i = iM; i <= j - 1; ++i)
-            {
-                if (operator()(i, j) != 0.0)
-                {
-                    b.row(i) -= operator()(i, j) * b.row(j);
-                }
-            }
-        }
-    }
-
-    template <typename EIGENMAT>
-    inline void solveAdj(EIGENMAT &b) const
-    {
-        int iM;
-        for (int j = 0; j <= N - 1; ++j)
-        {
-            b.row(j) /= operator()(j, j);
-            iM = std::min(j + upperBw, N - 1);
-            for (int i = j + 1; i <= iM; ++i)
-            {
-                if (operator()(j, i) != 0.0)
-                {
-                    b.row(i) -= operator()(j, i) * b.row(j);
-                }
-            }
-        }
-        for (int j = N - 1; j >= 0; --j)
-        {
-            iM = std::max(0, j - lowerBw);
-            for (int i = iM; i <= j - 1; ++i)
-            {
-                if (operator()(j, i) != 0.0)
-                {
-                    b.row(i) -= operator()(j, i) * b.row(j);
-                }
-            }
-        }
-    }
-};
 
 template <int Dim, int MaxP = 7>
 class NUBSTrajectory
@@ -193,6 +33,7 @@ protected:
     Eigen::VectorXd knots;
     mutable Eigen::MatrixXd knotJacobian;
     Eigen::Matrix<double, Eigen::Dynamic, Dim> control_points;
+    double last_linear_solve_relative_residual_ = 0.0;
 
     static constexpr double min_duration = 1.0e-8;
     static constexpr double finite_diff_rel_eps = 1.0e-5;
@@ -743,6 +584,133 @@ protected:
         return result;
     }
 
+    // A knot accessor for a single timing derivative.  Creating one of these
+    // is O(1): no dense knot-by-duration Jacobian is materialised.
+    struct LocalTimingKnotView
+    {
+        const Eigen::VectorXd &base_knots;
+        int first_shifted_knot = 0;
+
+        inline ad::Dual operator()(const int knot_index) const
+        {
+            return ad::Dual(base_knots(knot_index),
+                            knot_index >= first_shifted_knot ? 1.0 : 0.0);
+        }
+    };
+
+    inline double directEnergyDerivativeLocalAD(const int duration_index) const
+    {
+        const int M = static_cast<int>(durations_.size());
+        const auto physical_spans =
+            timing::affectedPhysicalSpans(p, duration_index, M);
+        if (physical_spans.empty())
+        {
+            return 0.0;
+        }
+
+        const LocalTimingKnotView local_knots{
+            knots, p + 1 + duration_index};
+        std::vector<double> nodes;
+        std::vector<double> weights;
+        gaussRule(std::min(s, 5), nodes, weights);
+
+        ad::Dual energy{};
+        std::array<std::array<ad::Dual, MaxP + 1>, MaxP + 1> ders{};
+        for (int physical_span = physical_spans.first;
+             physical_span <= physical_spans.last;
+             ++physical_span)
+        {
+            const int span = p + physical_span;
+            const ad::Dual t_start = local_knots(span);
+            const ad::Dual t_end = local_knots(span + 1);
+            const ad::Dual length = t_end - t_start;
+            if (ad::primal(length) < 1.0e-12)
+            {
+                continue;
+            }
+            const ad::Dual midpoint = (t_end + t_start) * 0.5;
+            for (std::size_t q = 0; q < nodes.size(); ++q)
+            {
+                const ad::Dual t = midpoint + length * (0.5 * nodes[q]);
+                const ad::Dual weight = length * (0.5 * weights[q]);
+                basis::dersBasisFuns<ad::Dual, MaxP>(
+                    p, s, span, t, local_knots, ders);
+
+                std::array<ad::Dual, Dim> derivative{};
+                for (int j = 0; j <= p; ++j)
+                {
+                    const int control_index = span - p + j;
+                    for (int dimension = 0; dimension < Dim; ++dimension)
+                    {
+                        derivative[dimension] +=
+                            ders[s][j] * control_points(control_index, dimension);
+                    }
+                }
+                ad::Dual squared_norm{};
+                for (const ad::Dual &component : derivative)
+                {
+                    squared_norm += component * component;
+                }
+                energy += weight * squared_norm;
+            }
+        }
+        return energy.derivative;
+    }
+
+    inline double systemRowAdjointDerivativeLocalAD(
+        const int row,
+        const int duration_index,
+        const Eigen::MatrixXd &adjoint) const
+    {
+        const ConstraintRowInfo info = constraintRowInfo(row);
+        const LocalTimingKnotView local_knots{
+            knots, p + 1 + duration_index};
+        std::array<std::array<ad::Dual, MaxP + 1>, MaxP + 1> ders{};
+        basis::dersBasisFuns<ad::Dual, MaxP>(
+            p, info.derivative, info.span, local_knots(info.eval_knot),
+            local_knots, ders);
+
+        ad::Dual projected_row{};
+        for (int j = 0; j <= p; ++j)
+        {
+            projected_row += ders[info.derivative][j] *
+                             adjoint.row(row).dot(
+                                 control_points.row(info.first_col + j));
+        }
+        return projected_row.derivative;
+    }
+
+    inline void propagateEnergyGradLocalAD(
+        const Eigen::MatrixXd &gdC,
+        Eigen::MatrixXd &gradByPoints,
+        Eigen::VectorXd &gradByTimes) const
+    {
+        const int M = static_cast<int>(durations_.size());
+        gradByPoints.resize(std::max(0, M - 1), Dim);
+        gradByTimes.resize(M);
+
+        Eigen::MatrixXd adjoint = gdC;
+        A.solveAdj(adjoint);
+        for (int i = 0; i < M - 1; ++i)
+        {
+            gradByPoints.row(i) = adjoint.row(s + i);
+        }
+
+        for (int duration_index = 0; duration_index < M; ++duration_index)
+        {
+            double constraint_term = 0.0;
+            const std::vector<int> affected_rows = timing::affectedConstraintRows(
+                p, s, duration_index, M);
+            for (const int row : affected_rows)
+            {
+                constraint_term += systemRowAdjointDerivativeLocalAD(
+                    row, duration_index, adjoint);
+            }
+            gradByTimes(duration_index) =
+                directEnergyDerivativeLocalAD(duration_index) - constraint_term;
+        }
+    }
+
     inline void evalLocalBasisAndTimeGrad(
         const int d,
         const int span,
@@ -788,6 +756,42 @@ public:
     inline const Eigen::Matrix<double, Eigen::Dynamic, Dim> &getControlPoints() const
     {
         return control_points;
+    }
+    inline double getLastLinearSolveRelativeResidual() const
+    {
+        return last_linear_solve_relative_residual_;
+    }
+
+    inline static double conditionNumber2(const BandedSystem &system)
+    {
+        const int n = system.rows();
+        if (n == 0)
+        {
+            return 1.0;
+        }
+        Eigen::MatrixXd dense = Eigen::MatrixXd::Zero(n, n);
+        for (int row = 0; row < n; ++row)
+        {
+            for (int col = 0; col < n; ++col)
+            {
+                dense(row, col) = system.originalCoefficient(row, col);
+            }
+        }
+        const Eigen::JacobiSVD<Eigen::MatrixXd> svd(
+            dense, Eigen::ComputeThinU | Eigen::ComputeThinV);
+        const Eigen::VectorXd singular_values = svd.singularValues();
+        const double sigma_max = singular_values(0);
+        const double sigma_min = singular_values(singular_values.size() - 1);
+        if (sigma_min <= std::numeric_limits<double>::min())
+        {
+            return std::numeric_limits<double>::infinity();
+        }
+        return sigma_max / sigma_min;
+    }
+
+    inline double getFullSystemConditionNumber() const
+    {
+        return conditionNumber2(A);
     }
 
     inline int findSpan(const double t,
@@ -1012,8 +1016,11 @@ public:
             b.row(row++) = tailState.col(d).transpose();
         }
 
+        const Eigen::Matrix<double, Eigen::Dynamic, Dim> rhs = b;
         A.factorizeLU();
         A.solve(b);
+        last_linear_solve_relative_residual_ =
+            A.relativeResidualInfinityNorm(b, rhs);
         P_full = b;
         control_points = P_full;
     }
@@ -1610,7 +1617,7 @@ public:
                                          Eigen::VectorXd &gradByTimes) const
     {
         // This validation path uses dense knot sensitivity through BasisJetCache.
-        // Prefer getEnergyAndFiniteDiffGrad() for optimization loops.
+        // Prefer getEnergyAndGrad() for optimization loops.
         Eigen::MatrixXd gdC;
         getEnergyPartialGradByCoeffs(cost, gdC);
         Eigen::VectorXd gdT_direct;
@@ -1625,6 +1632,25 @@ public:
         Eigen::MatrixXd gdC;
         getEnergyPartialGradByCoeffs(cost, gdC);
         propagateEnergyGradFiniteDiff(gdC, durations_, gradByPoints, gradByTimes);
+    }
+
+    // Default production path: global adjoint for the construction solve and
+    // one-dimensional forward AD restricted to each duration's exact stencil.
+    // Dense analytic and finite-difference methods above are validation paths.
+    inline void getEnergyAndLocalADGrad(double &cost,
+                                        Eigen::MatrixXd &gradByPoints,
+                                        Eigen::VectorXd &gradByTimes) const
+    {
+        Eigen::MatrixXd gdC;
+        getEnergyPartialGradByCoeffs(cost, gdC);
+        propagateEnergyGradLocalAD(gdC, gradByPoints, gradByTimes);
+    }
+
+    inline void getEnergyAndGrad(double &cost,
+                                 Eigen::MatrixXd &gradByPoints,
+                                 Eigen::VectorXd &gradByTimes) const
+    {
+        getEnergyAndLocalADGrad(cost, gradByPoints, gradByTimes);
     }
 
     inline void getEnergyAndFiniteDiffGradFull(double &cost,
@@ -2077,8 +2103,11 @@ public:
             b.row(row++) = tailState.col(d).transpose();
         }
 
+        const Eigen::Matrix<double, Eigen::Dynamic, Dim> rhs = b;
         this->A.factorizeLU();
         this->A.solve(b);
+        this->last_linear_solve_relative_residual_ =
+            this->A.relativeResidualInfinityNorm(b, rhs);
         P_full = b;
         this->control_points = P_full;
     }
@@ -2688,7 +2717,7 @@ public:
                                          Eigen::VectorXd &gradByTimes) const
     {
         // This validation path uses dense knot sensitivity through BasisJetCache.
-        // Prefer getEnergyAndFiniteDiffGrad() for optimization loops.
+        // Prefer getEnergyAndGrad() for optimization loops.
         Eigen::MatrixXd gdC;
         getEnergyPartialGradByCoeffs(cost, gdC);
         Eigen::VectorXd gdT_direct;
@@ -2986,6 +3015,16 @@ public:
     using Parent::generateFixedRatio;
     using Parent::generateWithTotalDuration;
 
+    inline double getReducedUniformSystemConditionNumber() const
+    {
+        const int M = static_cast<int>(this->durations_.size());
+        if (M <= 1)
+        {
+            return 1.0;
+        }
+        return Parent::conditionNumber2(reducedMatrixForPieceNum(M));
+    }
+
     inline void generate(const Eigen::MatrixXd &P_inner,
                          const Eigen::MatrixXd &headState,
                          const Eigen::MatrixXd &tailState,
@@ -3236,6 +3275,21 @@ public:
     {
         ensureFullSystemFactorized();
         Parent::getEnergyAndFiniteDiffGrad(cost, gradByPoints, gradByTimes);
+    }
+
+    inline void getEnergyAndLocalADGrad(double &cost,
+                                        Eigen::MatrixXd &gradByPoints,
+                                        Eigen::VectorXd &gradByTimes) const
+    {
+        ensureFullSystemFactorized();
+        Parent::getEnergyAndLocalADGrad(cost, gradByPoints, gradByTimes);
+    }
+
+    inline void getEnergyAndGrad(double &cost,
+                                 Eigen::MatrixXd &gradByPoints,
+                                 Eigen::VectorXd &gradByTimes) const
+    {
+        getEnergyAndLocalADGrad(cost, gradByPoints, gradByTimes);
     }
 
     inline void getEnergyAndFiniteDiffGradFull(double &cost,

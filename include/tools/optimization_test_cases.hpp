@@ -195,10 +195,10 @@ inline void checkGenericSpecializedOne(const unsigned int seed)
     Eigen::MatrixXd fixed_gp;
     Eigen::VectorXd generic_gt;
     Eigen::VectorXd fixed_gt;
-    generic.getEnergyAndFiniteDiffGrad(generic_cost, generic_gp, generic_gt);
-    fixed.getEnergyAndFiniteDiffGrad(fixed_cost, fixed_gp, fixed_gt);
+    generic.getEnergyAndGrad(generic_cost, generic_gp, generic_gt);
+    fixed.getEnergyAndGrad(fixed_cost, fixed_gp, fixed_gt);
     requireNear(fixed_cost, generic_cost, 2.0e-9, 2.0e-9,
-                "generic vs fixed finite-diff cost");
+                "generic vs fixed Local-AD cost");
     requireMatrixNear(fixed_gp, generic_gp, 5.0e-7, 5.0e-7,
                       "generic vs fixed point gradient");
     requireMatrixNear(fixed_gt, generic_gt, 2.0e-5, 2.0e-5,
@@ -254,7 +254,7 @@ inline void checkExternalGradientOne(const unsigned int seed)
     double cost = 0.0;
     Eigen::MatrixXd grad_points;
     Eigen::VectorXd grad_times;
-    trajectory.getEnergyAndFiniteDiffGrad(cost, grad_points, grad_times);
+    trajectory.getEnergyAndGrad(cost, grad_points, grad_times);
 
     Eigen::Matrix<double, Eigen::Dynamic, Dim> numeric_gp =
         Eigen::Matrix<double, Eigen::Dynamic, Dim>::Zero(M - 1, Dim);
@@ -382,8 +382,7 @@ inline void checkFixedRatioTotalDurationOne(const unsigned int seed)
     double segment_cost = 0.0;
     Eigen::MatrixXd segment_gp;
     Eigen::VectorXd segment_gt;
-    trajectory.getEnergyAndFiniteDiffGrad(segment_cost, segment_gp,
-                                          segment_gt);
+    trajectory.getEnergyAndGrad(segment_cost, segment_gp, segment_gt);
 
     const Eigen::VectorXd normalized_ratios =
         trajectory.getDurations() / trajectory.getTotalDuration();
@@ -541,8 +540,7 @@ inline void checkUniformTimeOne(const unsigned int seed)
     double segment_cost = 0.0;
     Eigen::MatrixXd segment_gp;
     Eigen::VectorXd segment_gt;
-    uniform.getEnergyAndFiniteDiffGrad(segment_cost, segment_gp,
-                                       segment_gt);
+    uniform.getEnergyAndGrad(segment_cost, segment_gp, segment_gt);
 
     requireNear(uniform_cost, segment_cost, 2.0e-9, 2.0e-9,
                 "uniform gradient cost");

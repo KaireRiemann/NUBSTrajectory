@@ -360,8 +360,8 @@ inline void runMincoEnergyGradient3DCase(const int piece_num = 6)
     double nubs_cost = 0.0;
     Eigen::MatrixXd nubs_grad_points;
     Eigen::VectorXd nubs_grad_times;
-    trajectory.getEnergyAndFiniteDiffGrad(nubs_cost, nubs_grad_points,
-                                          nubs_grad_times);
+    trajectory.getEnergyAndGrad(nubs_cost, nubs_grad_points,
+                                nubs_grad_times);
 
     double minco_cost = 0.0;
     Eigen::MatrixXd minco_gdC;
@@ -393,7 +393,7 @@ inline void runMincoEnergyGradient3DCase(const int piece_num = 6)
             double cost = 0.0;
             Eigen::MatrixXd gp;
             Eigen::VectorXd gt;
-            trajectory.getEnergyAndFiniteDiffGrad(cost, gp, gt);
+            trajectory.getEnergyAndGrad(cost, gp, gt);
         },
         timing_runs);
     const auto minco_grad_time = measureRepeated(

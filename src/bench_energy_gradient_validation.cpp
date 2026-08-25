@@ -194,8 +194,8 @@ GradientRow runOne(const int piece_num, const int runs)
         double nubs_cost = 0.0;
         Eigen::MatrixXd nubs_grad_points;
         Eigen::VectorXd nubs_grad_times;
-        trajectory.getEnergyAndFiniteDiffGrad(nubs_cost, nubs_grad_points,
-                                              nubs_grad_times);
+        trajectory.getEnergyAndGrad(nubs_cost, nubs_grad_points,
+                                    nubs_grad_times);
         energy_sum += nubs_cost;
 
         Eigen::Matrix<double, Eigen::Dynamic, Dim> numeric_grad_points;

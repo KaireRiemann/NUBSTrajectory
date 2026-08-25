@@ -135,7 +135,29 @@ nubs::QuinticUBS<3> quintic_ubs;
 nubs::SepticUBS<3> septic_ubs;
 ```
 
-The fixed-order implementation uses compile-time Gauss rules, fixed-degree basis kernels, and fixed-degree matrix assembly for construction and gradient propagation. The default optimization path uses centered finite-difference time gradients with local affected-span and affected-row reduction. The analytic time-gradient path is kept mainly for validation.
+The fixed-order implementation uses compile-time Gauss rules, fixed-degree basis kernels, and fixed-degree matrix assembly for construction and gradient propagation. The default timing-gradient path is **global adjoint + local forward automatic differentiation (AD)**: for one duration at a time it differentiates only its exact B-spline stencil, so it neither materialises a dense knot-by-duration Jacobian nor uses finite differences. The former dense analytic and finite-difference paths remain available as validation oracles.
+
+For the production gradient API, call:
+
+```cpp
+double cost = 0.0;
+Eigen::MatrixXd grad_points;
+Eigen::VectorXd grad_times;
+traj.getEnergyAndGrad(cost, grad_points, grad_times);
+```
+
+The propagated derivative is
+
+$$
+\frac{dE}{dT_k} =
+\left.\frac{\partial E}{\partial T_k}\right|_C
+- \lambda^\mathsf{T}\frac{\partial A}{\partial T_k}C,
+\qquad A^\mathsf{T}\lambda = \frac{\partial E}{\partial C}.
+$$
+
+For degree $p$, the direct-energy spans affected by $T_k$ are exactly
+$r \in [k-p+1, k+p-1] \cap [0,M-1]$. This locality bounds the work per
+duration by the fixed spline order rather than the trajectory length.
 
 For a smaller timing decision space, use the fixed-ratio total-duration path:
 
@@ -256,6 +278,11 @@ Main groups:
 - Centered finite-difference gradient checks
 - Generic vs fixed-order equivalence checks
 - Local finite-difference vs full finite-difference checks
+- Scalar Dual arithmetic, scalar-generic basis, and exact timing-stencil tests
+- Local-AD gradients against dense analytic, full finite-difference, external
+  finite-difference, and MINCO reference gradients
+- Non-uniform timing-ratio robustness checks for $R=1,10,100,1000$, including
+  interpolation residuals and banded-solver pivot statistics
 - Small-duration robustness checks
 - A small benchmark for `Dim = 3`, `s = 3`
 
@@ -266,6 +293,24 @@ cmake -S . -B build
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
+
+Configuration switches are `NUBS_ENABLE_REFERENCE_FD`,
+`NUBS_ENABLE_DENSE_ANALYTIC`, `NUBS_ENABLE_BENCHMARKS`,
+`NUBS_ENABLE_PLANNER_TESTS` (off in this standalone repository), and
+`NUBS_STRICT_NUMERICS`. The first two retain independent validation oracles;
+they are not required by `getEnergyAndGrad`.
+
+For the complete strict build, all validation tests, and fresh CSV outputs:
+
+```bash
+bash scripts/run_validation.sh build 20
+```
+
+The script writes `build/validation/nonuniform_construction.csv` and
+`build/validation/energy_gradient_validation.csv`, plus the strong-ratio
+robustness CSV and SVG figures under `build/validation/figures/`. The
+repetition count is an argument; increase it for publication figures rather
+than treating one noisy timing run as a performance result.
 
 The large-scale optimizer comparison can also be run directly:
 
@@ -332,6 +377,29 @@ python3 scripts/plot_nonuniform_construction_speed.py \
     docs/images/nonuniform_construction_speed.svg
 ```
 
+### Strongly Non-Uniform Duration Robustness
+
+The reviewer-facing robustness benchmark holds the total duration and piece
+count fixed, uses alternating short/long durations, and sweeps the
+maximum-to-minimum duration ratio (R\in\{1,10,100,1000\}). It covers the
+minimum-acceleration, minimum-jerk, and minimum-snap cases (`s = 2, 3, 4`).
+For every deterministic problem it compares NUBS with the vendored MINCO
+oracle and reports the maximum position and energy discrepancy, boundary and
+waypoint residuals, derivative discrepancies at waypoints, one-sided
+continuity jumps, full-system and reduced-uniform-system 2-norm condition
+numbers, smallest LU pivot, and relative solve residual.
+
+```bash
+./bin/bench_nonuniform_robustness 20 \
+    build/nonuniform_robustness.csv
+python3 scripts/plot_nonuniform_robustness.py \
+    build/nonuniform_robustness.csv build/nonuniform_robustness_figures
+```
+
+The error and conditioning plots use logarithmic vertical axes. The
+uniform-time reduced matrix is intentionally plotted as a horizontal series:
+for a fixed piece count it is independent of the non-uniform allocation ratio.
+
 For gradient validation, run the following benchmark. It reports the maximum,
 RMS, and relative errors of NUBS energy gradients against both centered finite
 differences and MINCO; its arguments follow the same `runs [csv-path]` form.
@@ -343,7 +411,9 @@ differences and MINCO; its arguments follow the same `runs [csv-path]` form.
 
 ## Repository Layout
 
-- `include/NUBSTrajectory.hpp`: main implementation
+- `include/NUBSTrajectory.hpp`: stable umbrella header and trajectory API
+- `include/nubs/`: independently testable banded solver, Dual scalar,
+  scalar-generic basis kernel, and exact timing-stencil modules
 - `include/gcopter/`: vendored MINCO-related headers used for comparison tests
 - `include/large_scale_traj_opt/`: vendored headers from
   `ZJU-FAST-Lab/large_scale_traj_optimizer` used for uniform-time comparison
