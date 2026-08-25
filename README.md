@@ -135,7 +135,7 @@ nubs::QuinticUBS<3> quintic_ubs;
 nubs::SepticUBS<3> septic_ubs;
 ```
 
-The fixed-order implementation uses compile-time Gauss rules, fixed-degree basis kernels, and fixed-degree matrix assembly for construction and gradient propagation. The default timing-gradient path is **global adjoint + local forward automatic differentiation (AD)**: for one duration at a time it differentiates only its exact B-spline stencil, so it neither materialises a dense knot-by-duration Jacobian nor uses finite differences. The former dense analytic and finite-difference paths remain available as validation oracles.
+The fixed-order implementation uses compile-time Gauss rules, fixed-degree basis kernels, and fixed-degree matrix assembly. Its default timing-gradient path is **global adjoint + scalar reverse propagation**: it forms the derivative-control recurrence exactly, reverses its local divided differences and low-degree basis recurrence, and then applies the construction adjoint. Interior waypoint rows use the same scalar basis reverse; only the $O(s)$ endpoint derivative rows retain a small fixed-size jet. This avoids both a dense knot-by-duration Jacobian and carrying every local duration direction through every primitive basis operation. The runtime-order API retains scalar local AD, while dense analytic and finite-difference paths remain validation oracles. See [the gradient-performance note](docs/gradient_propagation_performance.md) for the measured trade-offs and remaining gap to MINCO.
 
 For the production gradient API, call:
 
@@ -399,6 +399,39 @@ python3 scripts/plot_nonuniform_robustness.py \
 The error and conditioning plots use logarithmic vertical axes. The
 uniform-time reduced matrix is intentionally plotted as a horizontal series:
 for a fixed piece count it is independent of the non-uniform allocation ratio.
+
+### Gradient Construction and Propagation Timing
+
+The following benchmark uses identical preconstructed trajectories and shared
+waypoint/duration decision variables. It separates (1) native direct-gradient
+construction from (2) complete propagation to waypoint and duration gradients.
+The direct terms deliberately remain in each method's internal coordinates
+(B-spline controls for NUBS and polynomial coefficients for MINCO); the full
+propagated gradient is compared numerically in the common decision variables.
+For `NUBSTrajectoryT<s>`, the timed NUBS path uses an exact
+derivative-control formulation.  It differentiates the local
+divided-difference map and low-degree B-spline basis with scalar reverse
+passes, then applies the construction adjoint.  Interior interpolation rows
+of the construction system use the same scalar basis reverse; only the
+constant number of endpoint derivative rows retain the small LocalJet path.
+
+```bash
+./bin/bench_gradient_propagation 500 \
+    build/gradient_propagation_benchmark.csv
+python3 scripts/plot_gradient_propagation_speed.py \
+    build/gradient_propagation_benchmark.csv \
+    build/gradient_propagation_speed.svg
+```
+
+To plot the historical scalar Local-AD, fused Local-Jet, exact Local-Jet, and
+the final scalar-reverse NUBS kernels from separately retained benchmark CSV
+files, use:
+
+```bash
+python3 scripts/plot_gradient_kernel_comparison.py \
+    scalar_gradient.csv fused_gradient.csv exact_gradient.csv \
+    scalar_reverse_gradient.csv gradient_kernel_comparison.svg
+```
 
 For gradient validation, run the following benchmark. It reports the maximum,
 RMS, and relative errors of NUBS energy gradients against both centered finite

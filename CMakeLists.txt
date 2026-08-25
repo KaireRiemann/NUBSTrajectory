@@ -94,6 +94,10 @@ if(NUBS_ENABLE_BENCHMARKS)
     target_link_libraries(bench_nonuniform_robustness PRIVATE nubs_trajectory)
     target_compile_options(bench_nonuniform_robustness PRIVATE -Wall -Wextra -Wpedantic)
 
+    add_executable(bench_gradient_propagation src/bench_gradient_propagation.cpp)
+    target_link_libraries(bench_gradient_propagation PRIVATE nubs_trajectory)
+    target_compile_options(bench_gradient_propagation PRIVATE -Wall -Wextra -Wpedantic)
+
     add_executable(export_equivalence_figure_data src/export_equivalence_figure_data.cpp)
     target_link_libraries(export_equivalence_figure_data PRIVATE nubs_trajectory)
     target_compile_options(export_equivalence_figure_data PRIVATE -Wall -Wextra -Wpedantic)

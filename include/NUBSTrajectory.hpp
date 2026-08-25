@@ -682,6 +682,7 @@ protected:
 
     inline void propagateEnergyGradLocalAD(
         const Eigen::MatrixXd &gdC,
+        const Eigen::VectorXd &gdT_direct,
         Eigen::MatrixXd &gradByPoints,
         Eigen::VectorXd &gradByTimes) const
     {
@@ -707,7 +708,7 @@ protected:
                     row, duration_index, adjoint);
             }
             gradByTimes(duration_index) =
-                directEnergyDerivativeLocalAD(duration_index) - constraint_term;
+                gdT_direct(duration_index) - constraint_term;
         }
     }
 
@@ -1634,6 +1635,27 @@ public:
         propagateEnergyGradFiniteDiff(gdC, durations_, gradByPoints, gradByTimes);
     }
 
+    // Direct energy sensitivities at fixed control points. This is useful for
+    // profiling the local-AD construction separately from adjoint propagation.
+    inline void getEnergyPartialGradByTimesLocalAD(Eigen::VectorXd &gdT_direct) const
+    {
+        const int M = static_cast<int>(durations_.size());
+        gdT_direct.resize(M);
+        for (int duration_index = 0; duration_index < M; ++duration_index)
+        {
+            gdT_direct(duration_index) =
+                directEnergyDerivativeLocalAD(duration_index);
+        }
+    }
+
+    inline void getEnergyPartialGradLocalAD(double &cost,
+                                            Eigen::MatrixXd &gdC,
+                                            Eigen::VectorXd &gdT_direct) const
+    {
+        getEnergyPartialGradByCoeffs(cost, gdC);
+        getEnergyPartialGradByTimesLocalAD(gdT_direct);
+    }
+
     // Default production path: global adjoint for the construction solve and
     // one-dimensional forward AD restricted to each duration's exact stencil.
     // Dense analytic and finite-difference methods above are validation paths.
@@ -1642,8 +1664,10 @@ public:
                                         Eigen::VectorXd &gradByTimes) const
     {
         Eigen::MatrixXd gdC;
-        getEnergyPartialGradByCoeffs(cost, gdC);
-        propagateEnergyGradLocalAD(gdC, gradByPoints, gradByTimes);
+        Eigen::VectorXd gdT_direct;
+        getEnergyPartialGradLocalAD(cost, gdC, gdT_direct);
+        propagateEnergyGradLocalAD(gdC, gdT_direct,
+                                   gradByPoints, gradByTimes);
     }
 
     inline void getEnergyAndGrad(double &cost,
@@ -2066,6 +2090,1188 @@ private:
         }
     }
 
+    // One physical B-spline span depends on at most 2P-1 neighbouring
+    // durations.  Carry all of those directions together so its basis values
+    // and quadrature points are evaluated once, rather than once per T_k.
+    static constexpr int LocalTimingWidth = 2 * P - 1;
+    using LocalTimingJet = ad::LocalJet<LocalTimingWidth>;
+
+    struct FixedLocalTimingKnotView
+    {
+        const Eigen::VectorXd &base_knots;
+        int first_duration = 0;
+        int duration_count = 0;
+
+        inline LocalTimingJet operator()(const int knot_index) const
+        {
+            LocalTimingJet result(base_knots(knot_index));
+            for (int lane = 0; lane < duration_count; ++lane)
+            {
+                const int duration_index = first_duration + lane;
+                result.derivative[lane] =
+                    knot_index >= P + 1 + duration_index ? 1.0 : 0.0;
+            }
+            return result;
+        }
+    };
+
+    // Reverse-mode counterpart of FixedLocalTimingKnotView.  The local knot
+    // window is cached as affine functions of its contiguous duration stencil,
+    // so generic basis evaluation can use Reverse without rebuilding suffix
+    // sums at every knot accessor call.
+    struct FixedLocalReverseKnotView
+    {
+        ad::ReverseTape &tape;
+        int first_knot = 0;
+        int first_duration = 0;
+        int duration_count = 0;
+        std::array<ad::Reverse, LocalTimingWidth> duration_variables{};
+        std::array<ad::Reverse, LocalTimingWidth + 1> shifted_sums{};
+        std::array<ad::Reverse, 2 * P> local_knots{};
+
+        FixedLocalReverseKnotView(ad::ReverseTape &tape_,
+                                  const Eigen::VectorXd &base_knots,
+                                  const int first_knot_,
+                                  const int first_duration_,
+                                  const int duration_count_)
+            : tape(tape_),
+              first_knot(first_knot_),
+              first_duration(first_duration_),
+              duration_count(duration_count_)
+        {
+            shifted_sums[0] = ad::Reverse(0.0);
+            for (int lane = 0; lane < duration_count; ++lane)
+            {
+                duration_variables[lane] = tape.variable(0.0);
+                shifted_sums[lane + 1] =
+                    shifted_sums[lane] + duration_variables[lane];
+            }
+            for (int offset = 0; offset < 2 * P; ++offset)
+            {
+                const int knot_index = first_knot + offset;
+                const int shifted_count = std::min(
+                    duration_count,
+                    std::max(0, knot_index - (P + 1 + first_duration) + 1));
+                local_knots[offset] =
+                    ad::Reverse(base_knots(knot_index)) +
+                    shifted_sums[shifted_count];
+            }
+        }
+
+        inline ad::Reverse operator()(const int knot_index) const
+        {
+            return local_knots[knot_index - first_knot];
+        }
+
+        inline double gradient(const int lane) const
+        {
+            return tape.gradient(duration_variables[lane]);
+        }
+    };
+
+    inline timing::IndexRange affectedDurationRangeForKnotWindowFixed(
+        const int first_knot,
+        const int last_knot) const
+    {
+        const int M = static_cast<int>(this->durations_.size());
+        return {std::max(0, first_knot - P),
+                std::min(M - 1, last_knot - P - 1)};
+    }
+
+    // Fused local-jet pass for the direct energy terms.  It accumulates the
+    // energy, control-point gradient, and all direct duration derivatives in
+    // one traversal of the physical spans.
+    inline void getEnergyPartialGradLocalADFused(
+        double &cost,
+        Eigen::MatrixXd &gdC,
+        Eigen::VectorXd &gdT_direct) const
+    {
+        const int M = static_cast<int>(this->durations_.size());
+        cost = 0.0;
+        gdC.setZero(this->N_c, Dim);
+        gdT_direct.setZero(M);
+
+        std::array<std::array<LocalTimingJet, P + 1>, P + 1> ders{};
+        for (int physical_span = 0; physical_span < M; ++physical_span)
+        {
+            const int first_duration = std::max(0, physical_span - P + 1);
+            const int last_duration =
+                std::min(M - 1, physical_span + P - 1);
+            const int duration_count = last_duration - first_duration + 1;
+            const FixedLocalTimingKnotView local_knots{
+                this->knots, first_duration, duration_count};
+            const int span = P + physical_span;
+            const LocalTimingJet t_start = local_knots(span);
+            const LocalTimingJet t_end = local_knots(span + 1);
+            const LocalTimingJet length = t_end - t_start;
+            if (ad::primal(length) < 1.0e-12)
+            {
+                continue;
+            }
+
+            const LocalTimingJet midpoint = (t_end + t_start) * 0.5;
+            LocalTimingJet span_energy;
+            for (int q = 0; q < Gauss::Num; ++q)
+            {
+                const LocalTimingJet t =
+                    midpoint + length * (0.5 * Gauss::nodes[q]);
+                const LocalTimingJet weight =
+                    length * (0.5 * Gauss::weights[q]);
+                basis::dersBasisFunsFixed<LocalTimingJet, P>(
+                    S, span, t, local_knots, ders);
+
+                std::array<LocalTimingJet, Dim> derivative{};
+                for (int j = 0; j <= P; ++j)
+                {
+                    const int control_index = span - P + j;
+                    for (int dimension = 0; dimension < Dim; ++dimension)
+                    {
+                        derivative[dimension] +=
+                            ders[S][j] *
+                            this->control_points(control_index, dimension);
+                    }
+                }
+
+                LocalTimingJet squared_norm;
+                for (const LocalTimingJet &component : derivative)
+                {
+                    squared_norm += component * component;
+                }
+                span_energy += weight * squared_norm;
+
+                for (int j = 0; j <= P; ++j)
+                {
+                    const int control_index = span - P + j;
+                    const double coefficient =
+                        2.0 * ad::primal(weight) *
+                        ad::primal(ders[S][j]);
+                    for (int dimension = 0; dimension < Dim; ++dimension)
+                    {
+                        gdC(control_index, dimension) +=
+                            coefficient * ad::primal(derivative[dimension]);
+                    }
+                }
+            }
+
+            cost += ad::primal(span_energy);
+            for (int lane = 0; lane < duration_count; ++lane)
+            {
+                gdT_direct(first_duration + lane) +=
+                    span_energy.derivative[lane];
+            }
+        }
+    }
+
+    static inline double factorialFixed(const int value)
+    {
+        double result = 1.0;
+        for (int i = 2; i <= value; ++i)
+        {
+            result *= static_cast<double>(i);
+        }
+        return result;
+    }
+
+    inline double getEnergyExact() const
+    {
+        const int M = static_cast<int>(this->durations_.size());
+        double cost = 0.0;
+        Eigen::Matrix<double, P + 1, P + 1> ders;
+
+        for (int physical_span = 0; physical_span < M; ++physical_span)
+        {
+            const int span = P + physical_span;
+            const double t_start = this->knots(span);
+            const double length = this->knots(span + 1) - t_start;
+            if (length < 1.0e-12)
+            {
+                continue;
+            }
+
+            dersBasisFunsFixed(P, span, t_start, this->knots, ders);
+            std::array<std::array<double, Dim>, S> derivatives{};
+            for (int a = 0; a < S; ++a)
+            {
+                for (int j = 0; j <= P; ++j)
+                {
+                    const int control_index = span - P + j;
+                    for (int dimension = 0; dimension < Dim; ++dimension)
+                    {
+                        derivatives[a][dimension] +=
+                            ders(S + a, j) *
+                            this->control_points(control_index, dimension);
+                    }
+                }
+            }
+
+            std::array<double, P + 1> length_powers{};
+            length_powers[0] = 1.0;
+            for (int exponent = 1; exponent <= P; ++exponent)
+            {
+                length_powers[exponent] =
+                    length_powers[exponent - 1] * length;
+            }
+            for (int a = 0; a < S; ++a)
+            {
+                for (int b = 0; b < S; ++b)
+                {
+                    const int exponent = a + b + 1;
+                    const double gram_weight =
+                        length_powers[exponent] /
+                        (factorialFixed(a) * factorialFixed(b) *
+                         static_cast<double>(exponent));
+                    for (int dimension = 0; dimension < Dim; ++dimension)
+                    {
+                        cost += gram_weight * derivatives[a][dimension] *
+                                derivatives[b][dimension];
+                    }
+                }
+            }
+        }
+        return cost;
+    }
+
+    // Exact span-energy kernel.  On span r, p^(S)(t_r + tau) is a polynomial
+    // of degree S-1 because P = 2S-1.  With v_a = p^(S+a)(t_r),
+    //
+    // E_r = sum_{a,b=0}^{S-1} v_a^T v_b L^(a+b+1)
+    //       / (a! b! (a+b+1)).
+    //
+    // Thus a single fixed-degree basis-derivative recurrence at the left
+    // endpoint replaces the S Gauss-point recurrences previously used for a
+    // span.  LocalTimingJet preserves the exact local time derivative while
+    // the double-valued Gram form supplies the control-point gradient.
+    inline void getEnergyPartialGradLocalADExact(
+        double &cost,
+        Eigen::MatrixXd &gdC,
+        Eigen::VectorXd &gdT_direct) const
+    {
+        const int M = static_cast<int>(this->durations_.size());
+        cost = 0.0;
+        gdC.setZero(this->N_c, Dim);
+        gdT_direct.setZero(M);
+
+        std::array<std::array<LocalTimingJet, P + 1>, P + 1> ders{};
+        for (int physical_span = 0; physical_span < M; ++physical_span)
+        {
+            const int first_duration = std::max(0, physical_span - P + 1);
+            const int last_duration =
+                std::min(M - 1, physical_span + P - 1);
+            const int duration_count = last_duration - first_duration + 1;
+            const FixedLocalTimingKnotView local_knots{
+                this->knots, first_duration, duration_count};
+            const int span = P + physical_span;
+            const LocalTimingJet t_start = local_knots(span);
+            const LocalTimingJet t_end = local_knots(span + 1);
+            const LocalTimingJet length = t_end - t_start;
+            if (ad::primal(length) < 1.0e-12)
+            {
+                continue;
+            }
+
+            basis::dersBasisFunsFixed<LocalTimingJet, P>(
+                P, span, t_start, local_knots, ders);
+
+            std::array<std::array<LocalTimingJet, Dim>, S> derivatives{};
+            for (int a = 0; a < S; ++a)
+            {
+                for (int j = 0; j <= P; ++j)
+                {
+                    const int control_index = span - P + j;
+                    for (int dimension = 0; dimension < Dim; ++dimension)
+                    {
+                        derivatives[a][dimension] +=
+                            ders[S + a][j] *
+                            this->control_points(control_index, dimension);
+                    }
+                }
+            }
+
+            std::array<LocalTimingJet, P + 1> length_powers{};
+            length_powers[0] = LocalTimingJet(1.0);
+            for (int exponent = 1; exponent <= P; ++exponent)
+            {
+                length_powers[exponent] =
+                    length_powers[exponent - 1] * length;
+            }
+
+            LocalTimingJet span_energy;
+            std::array<std::array<double, Dim>, S> polynomial_gradient{};
+            for (int a = 0; a < S; ++a)
+            {
+                for (int b = 0; b < S; ++b)
+                {
+                    const int exponent = a + b + 1;
+                    const double gram_weight =
+                        1.0 / (factorialFixed(a) * factorialFixed(b) *
+                               static_cast<double>(exponent));
+                    LocalTimingJet dot_product;
+                    for (int dimension = 0; dimension < Dim; ++dimension)
+                    {
+                        dot_product += derivatives[a][dimension] *
+                                       derivatives[b][dimension];
+                        polynomial_gradient[a][dimension] +=
+                            2.0 * gram_weight *
+                            ad::primal(length_powers[exponent]) *
+                            ad::primal(derivatives[b][dimension]);
+                    }
+                    span_energy += gram_weight * length_powers[exponent] *
+                                   dot_product;
+                }
+            }
+
+            for (int j = 0; j <= P; ++j)
+            {
+                const int control_index = span - P + j;
+                for (int a = 0; a < S; ++a)
+                {
+                    const double basis_derivative =
+                        ad::primal(ders[S + a][j]);
+                    for (int dimension = 0; dimension < Dim; ++dimension)
+                    {
+                        gdC(control_index, dimension) +=
+                            basis_derivative * polynomial_gradient[a][dimension];
+                    }
+                }
+            }
+
+            cost += ad::primal(span_energy);
+            for (int lane = 0; lane < duration_count; ++lane)
+            {
+                gdT_direct(first_duration + lane) +=
+                    span_energy.derivative[lane];
+            }
+        }
+    }
+
+    // Reverse-mode implementation of the exact Gram kernel.  Each span has a
+    // scalar energy output but up to 2P-1 local duration inputs; reverse mode
+    // therefore computes all timing sensitivities in one backward sweep.
+    inline void getEnergyPartialGradLocalADReverse(
+        double &cost,
+        Eigen::MatrixXd &gdC,
+        Eigen::VectorXd &gdT_direct) const
+    {
+        const int M = static_cast<int>(this->durations_.size());
+        cost = 0.0;
+        gdC.setZero(this->N_c, Dim);
+        gdT_direct.setZero(M);
+
+        ad::ReverseTape tape(4096);
+        std::array<std::array<ad::Reverse, P + 1>, P + 1> ders{};
+        for (int physical_span = 0; physical_span < M; ++physical_span)
+        {
+            tape.reset();
+            const int first_duration = std::max(0, physical_span - P + 1);
+            const int last_duration =
+                std::min(M - 1, physical_span + P - 1);
+            const int duration_count = last_duration - first_duration + 1;
+            const int span = P + physical_span;
+            const FixedLocalReverseKnotView local_knots{
+                tape, this->knots, span - P + 1, first_duration, duration_count};
+            const ad::Reverse t_start = local_knots(span);
+            const ad::Reverse t_end = local_knots(span + 1);
+            const ad::Reverse length = t_end - t_start;
+            if (ad::primal(length) < 1.0e-12)
+            {
+                continue;
+            }
+
+            basis::dersBasisFunsFixed<ad::Reverse, P>(
+                P, span, t_start, local_knots, ders);
+
+            std::array<std::array<ad::Reverse, Dim>, S> derivatives{};
+            for (int a = 0; a < S; ++a)
+            {
+                for (int j = 0; j <= P; ++j)
+                {
+                    const int control_index = span - P + j;
+                    for (int dimension = 0; dimension < Dim; ++dimension)
+                    {
+                        derivatives[a][dimension] +=
+                            ders[S + a][j] *
+                            this->control_points(control_index, dimension);
+                    }
+                }
+            }
+
+            std::array<ad::Reverse, P + 1> length_powers{};
+            length_powers[0] = ad::Reverse(1.0);
+            for (int exponent = 1; exponent <= P; ++exponent)
+            {
+                length_powers[exponent] =
+                    length_powers[exponent - 1] * length;
+            }
+
+            ad::Reverse span_energy;
+            std::array<std::array<double, Dim>, S> polynomial_gradient{};
+            for (int a = 0; a < S; ++a)
+            {
+                for (int b = 0; b < S; ++b)
+                {
+                    const int exponent = a + b + 1;
+                    const double gram_weight =
+                        1.0 / (factorialFixed(a) * factorialFixed(b) *
+                               static_cast<double>(exponent));
+                    ad::Reverse dot_product;
+                    for (int dimension = 0; dimension < Dim; ++dimension)
+                    {
+                        dot_product += derivatives[a][dimension] *
+                                       derivatives[b][dimension];
+                        polynomial_gradient[a][dimension] +=
+                            2.0 * gram_weight *
+                            ad::primal(length_powers[exponent]) *
+                            ad::primal(derivatives[b][dimension]);
+                    }
+                    span_energy += gram_weight * length_powers[exponent] *
+                                   dot_product;
+                }
+            }
+
+            for (int j = 0; j <= P; ++j)
+            {
+                const int control_index = span - P + j;
+                for (int a = 0; a < S; ++a)
+                {
+                    const double basis_derivative =
+                        ad::primal(ders[S + a][j]);
+                    for (int dimension = 0; dimension < Dim; ++dimension)
+                    {
+                        gdC(control_index, dimension) +=
+                            basis_derivative * polynomial_gradient[a][dimension];
+                    }
+                }
+            }
+
+            cost += ad::primal(span_energy);
+            tape.backward(span_energy);
+            for (int lane = 0; lane < duration_count; ++lane)
+            {
+                gdT_direct(first_duration + lane) += local_knots.gradient(lane);
+            }
+        }
+    }
+
+    // Derivative-control formulation of the exact energy.  Repeatedly
+    // differentiating a degree P B-spline curve yields a degree S-1 curve:
+    //
+    // D_i^(r) = (P-r+1) (D_(i+1)^(r-1) - D_i^(r-1))
+    //           / (u_(i+P+1) - u_(i+r)).
+    //
+    // The degree S-1 derivative curve is integrated with its S-point Gauss
+    // rule, which is exact for the degree 2S-2 squared norm.  This replaces a
+    // degree-P, order-P basis derivative recurrence with small local divided
+    // differences plus a low-degree basis evaluation.  The transpose of the
+    // divided-difference recurrence supplies the exact control gradient.
+    // Forward local-jet reference implementation.  It remains available for
+    // cross-checking the scalar reverse path below, but is not used by the
+    // production API.
+    inline void getEnergyPartialGradDerivativeControlLocalJet(
+        double &cost,
+        Eigen::MatrixXd &gdC,
+        Eigen::VectorXd &gdT_direct) const
+    {
+        const int M = static_cast<int>(this->durations_.size());
+        cost = 0.0;
+        gdC.setZero(this->N_c, Dim);
+        gdT_direct.setZero(M);
+
+        std::array<std::array<LocalTimingJet, S>, S> low_degree_basis{};
+        for (int physical_span = 0; physical_span < M; ++physical_span)
+        {
+            const int first_duration = std::max(0, physical_span - P + 1);
+            const int last_duration =
+                std::min(M - 1, physical_span + P - 1);
+            const int duration_count = last_duration - first_duration + 1;
+            const int span = P + physical_span;
+            const int first_control = span - P;
+            const FixedLocalTimingKnotView local_knots{
+                this->knots, first_duration, duration_count};
+            const LocalTimingJet t_start = local_knots(span);
+            const LocalTimingJet t_end = local_knots(span + 1);
+            const LocalTimingJet length = t_end - t_start;
+            if (ad::primal(length) < 1.0e-12)
+            {
+                continue;
+            }
+
+            std::array<std::array<LocalTimingJet, Dim>, P + 1>
+                derivative_controls{};
+            for (int local_index = 0; local_index <= P; ++local_index)
+            {
+                for (int dimension = 0; dimension < Dim; ++dimension)
+                {
+                    derivative_controls[local_index][dimension] =
+                        LocalTimingJet(
+                            this->control_points(first_control + local_index,
+                                                 dimension));
+                }
+            }
+
+            std::array<std::array<double, P + 1>, S> difference_scales{};
+            for (int derivative = 1; derivative <= S; ++derivative)
+            {
+                const int output_count = P + 1 - derivative;
+                for (int local_index = 0;
+                     local_index < output_count;
+                     ++local_index)
+                {
+                    const LocalTimingJet denominator =
+                        local_knots(first_control + local_index + P + 1) -
+                        local_knots(first_control + local_index + derivative);
+                    const LocalTimingJet scale =
+                        static_cast<double>(P - derivative + 1) / denominator;
+                    difference_scales[derivative - 1][local_index] =
+                        ad::primal(scale);
+                    for (int dimension = 0; dimension < Dim; ++dimension)
+                    {
+                        derivative_controls[local_index][dimension] =
+                            scale *
+                            (derivative_controls[local_index + 1][dimension] -
+                             derivative_controls[local_index][dimension]);
+                    }
+                }
+            }
+
+            const auto derivative_knots = [&](const int knot_index)
+            {
+                return local_knots(knot_index + S);
+            };
+            const int derivative_span = span - S;
+            LocalTimingJet span_energy;
+            std::array<std::array<double, Dim>, P + 1> derivative_gradient{};
+            for (int q = 0; q < Gauss::Num; ++q)
+            {
+                const LocalTimingJet t =
+                    (t_end + t_start) * 0.5 +
+                    length * (0.5 * Gauss::nodes[q]);
+                const LocalTimingJet weight =
+                    length * (0.5 * Gauss::weights[q]);
+                basis::dersBasisFunsFixed<LocalTimingJet, S - 1>(
+                    0, derivative_span, t, derivative_knots, low_degree_basis);
+
+                std::array<LocalTimingJet, Dim> value{};
+                for (int j = 0; j < S; ++j)
+                {
+                    for (int dimension = 0; dimension < Dim; ++dimension)
+                    {
+                        value[dimension] += low_degree_basis[0][j] *
+                                            derivative_controls[j][dimension];
+                    }
+                }
+                LocalTimingJet squared_norm;
+                for (const LocalTimingJet &component : value)
+                {
+                    squared_norm += component * component;
+                }
+                span_energy += weight * squared_norm;
+
+                for (int j = 0; j < S; ++j)
+                {
+                    const double coefficient =
+                        2.0 * ad::primal(weight) *
+                        ad::primal(low_degree_basis[0][j]);
+                    for (int dimension = 0; dimension < Dim; ++dimension)
+                    {
+                        derivative_gradient[j][dimension] +=
+                            coefficient * ad::primal(value[dimension]);
+                    }
+                }
+            }
+
+            // H^T application: propagate the gradient of D^(S) back to the
+            // original P+1 control points through the divided differences.
+            for (int derivative = S; derivative >= 1; --derivative)
+            {
+                std::array<std::array<double, Dim>, P + 1> previous_gradient{};
+                const int output_count = P + 1 - derivative;
+                for (int local_index = 0;
+                     local_index < output_count;
+                     ++local_index)
+                {
+                    const double scale =
+                        difference_scales[derivative - 1][local_index];
+                    for (int dimension = 0; dimension < Dim; ++dimension)
+                    {
+                        const double gradient =
+                            derivative_gradient[local_index][dimension];
+                        previous_gradient[local_index][dimension] -=
+                            scale * gradient;
+                        previous_gradient[local_index + 1][dimension] +=
+                            scale * gradient;
+                    }
+                }
+                derivative_gradient = previous_gradient;
+            }
+            for (int local_index = 0; local_index <= P; ++local_index)
+            {
+                for (int dimension = 0; dimension < Dim; ++dimension)
+                {
+                    gdC(first_control + local_index, dimension) +=
+                        derivative_gradient[local_index][dimension];
+                }
+            }
+
+            cost += ad::primal(span_energy);
+            for (int lane = 0; lane < duration_count; ++lane)
+            {
+                gdT_direct(first_duration + lane) +=
+                    span_energy.derivative[lane];
+            }
+        }
+    }
+
+    // Reverse Algorithm A2.2 for a zero-order basis row.  The caller supplies
+    // the adjoints of its Degree+1 basis values; this routine returns the
+    // derivative with respect to the (possibly shifted) knot window and to
+    // the evaluation time.  It is deliberately scalar: all time directions
+    // are recovered in one reverse sweep instead of being carried through
+    // every arithmetic operation by LocalTimingJet.
+    template <int Degree>
+    inline void accumulateZeroOrderBasisKnotGradient(
+        const int span,
+        const int knot_offset,
+        const double evaluation_time,
+        const std::array<double, Degree + 1> &final_basis_adjoint,
+        double &evaluation_time_adjoint,
+        std::array<double, 2 * Degree> &knot_adjoint) const
+    {
+        std::array<double, Degree + 1> values{};
+        std::array<double, Degree + 1> left{};
+        std::array<double, Degree + 1> right{};
+        std::array<std::array<double, Degree + 1>, Degree + 1> inputs{};
+        std::array<std::array<double, Degree + 1>, Degree + 1> denominators{};
+        std::array<std::array<double, Degree + 1>, Degree + 1> temporaries{};
+        values[0] = 1.0;
+
+        for (int degree = 1; degree <= Degree; ++degree)
+        {
+            left[degree] = evaluation_time -
+                           this->knots(knot_offset + span + 1 - degree);
+            right[degree] = this->knots(knot_offset + span + degree) -
+                            evaluation_time;
+            double saved = 0.0;
+            for (int local_index = 0; local_index < degree; ++local_index)
+            {
+                inputs[degree][local_index] = values[local_index];
+                denominators[degree][local_index] =
+                    right[local_index + 1] + left[degree - local_index];
+                const double denominator = denominators[degree][local_index];
+                const double temporary = std::abs(denominator) < 1.0e-15
+                                             ? 0.0
+                                             : values[local_index] / denominator;
+                temporaries[degree][local_index] = temporary;
+                values[local_index] = saved + right[local_index + 1] * temporary;
+                saved = left[degree - local_index] * temporary;
+            }
+            values[degree] = saved;
+        }
+
+        std::array<double, Degree + 1> basis_adjoint = final_basis_adjoint;
+        std::array<double, Degree + 1> left_adjoint{};
+        std::array<double, Degree + 1> right_adjoint{};
+        for (int degree = Degree; degree >= 1; --degree)
+        {
+            std::array<double, Degree + 1> previous_adjoint{};
+            double saved_adjoint = basis_adjoint[degree];
+            for (int local_index = degree - 1;
+                 local_index >= 0;
+                 --local_index)
+            {
+                const double output_adjoint = basis_adjoint[local_index];
+                const double temporary = temporaries[degree][local_index];
+                const double input = inputs[degree][local_index];
+                const double denominator = denominators[degree][local_index];
+                const int left_index = degree - local_index;
+                const int right_index = local_index + 1;
+
+                right_adjoint[right_index] += output_adjoint * temporary;
+                left_adjoint[left_index] += saved_adjoint * temporary;
+                const double temporary_adjoint =
+                    output_adjoint * right[right_index] +
+                    saved_adjoint * left[left_index];
+                if (std::abs(denominator) >= 1.0e-15)
+                {
+                    previous_adjoint[local_index] +=
+                        temporary_adjoint / denominator;
+                    const double denominator_adjoint =
+                        -temporary_adjoint * input /
+                        (denominator * denominator);
+                    right_adjoint[right_index] += denominator_adjoint;
+                    left_adjoint[left_index] += denominator_adjoint;
+                }
+                saved_adjoint = output_adjoint;
+            }
+            basis_adjoint = previous_adjoint;
+        }
+
+        knot_adjoint.fill(0.0);
+        evaluation_time_adjoint = 0.0;
+        const int first_knot = knot_offset + span - Degree + 1;
+        for (int local_index = 1; local_index <= Degree; ++local_index)
+        {
+            evaluation_time_adjoint += left_adjoint[local_index] -
+                                       right_adjoint[local_index];
+            knot_adjoint[knot_offset + span + 1 - local_index - first_knot] -=
+                left_adjoint[local_index];
+            knot_adjoint[knot_offset + span + local_index - first_knot] +=
+                right_adjoint[local_index];
+        }
+    }
+
+    // Exact derivative-control energy with scalar reverse propagation in the
+    // duration variables.  In contrast with the local-jet reference path,
+    // it differentiates the divided-difference recurrence and the low-degree
+    // basis recurrence explicitly.  Thus its work is proportional to the
+    // small local stencil, rather than to (stencil width x every primitive
+    // arithmetic operation).
+    inline void getEnergyPartialGradDerivativeControl(
+        double &cost,
+        Eigen::MatrixXd &gdC,
+        Eigen::VectorXd &gdT_direct) const
+    {
+        const int M = static_cast<int>(this->durations_.size());
+        cost = 0.0;
+        gdC.setZero(this->N_c, Dim);
+        gdT_direct.setZero(M);
+
+        for (int physical_span = 0; physical_span < M; ++physical_span)
+        {
+            const int span = P + physical_span;
+            const int first_control = span - P;
+            const int first_duration = std::max(0, physical_span - P + 1);
+            const int last_duration =
+                std::min(M - 1, physical_span + P - 1);
+            const timing::IndexRange duration_range{
+                first_duration, last_duration};
+            const double t_start = this->knots(span);
+            const double t_end = this->knots(span + 1);
+            const double length = t_end - t_start;
+            if (length < 1.0e-12)
+            {
+                continue;
+            }
+
+            using LocalVector = std::array<double, Dim>;
+            std::array<std::array<LocalVector, P + 1>, S + 1>
+                derivative_history{};
+            for (int local_index = 0; local_index <= P; ++local_index)
+            {
+                for (int dimension = 0; dimension < Dim; ++dimension)
+                {
+                    derivative_history[0][local_index][dimension] =
+                        this->control_points(first_control + local_index,
+                                             dimension);
+                }
+            }
+
+            std::array<std::array<double, P + 1>, S> difference_scales{};
+            std::array<std::array<double, P + 1>, S> difference_denominators{};
+            for (int derivative = 1; derivative <= S; ++derivative)
+            {
+                const int output_count = P + 1 - derivative;
+                for (int local_index = 0;
+                     local_index < output_count;
+                     ++local_index)
+                {
+                    const double denominator =
+                        this->knots(first_control + local_index + P + 1) -
+                        this->knots(first_control + local_index + derivative);
+                    const double scale =
+                        static_cast<double>(P - derivative + 1) / denominator;
+                    difference_scales[derivative - 1][local_index] = scale;
+                    difference_denominators[derivative - 1][local_index] =
+                        denominator;
+                    for (int dimension = 0; dimension < Dim; ++dimension)
+                    {
+                        derivative_history[derivative][local_index][dimension] =
+                            scale *
+                            (derivative_history[derivative - 1][local_index + 1]
+                                                      [dimension] -
+                             derivative_history[derivative - 1][local_index]
+                                                      [dimension]);
+                    }
+                }
+            }
+
+            const int derivative_span = span - S;
+            std::array<std::array<double, S>, S> low_degree_basis{};
+            std::array<LocalVector, P + 1> derivative_gradient{};
+            std::array<double, 2 * P + 1> knot_adjoint{};
+            const int first_knot = span - P + 1;
+            const auto add_knot_adjoint = [&](const int knot_index,
+                                              const double gradient)
+            {
+                knot_adjoint[knot_index - first_knot] += gradient;
+            };
+
+            for (int q = 0; q < Gauss::Num; ++q)
+            {
+                const double midpoint = 0.5 * (t_start + t_end);
+                const double t = midpoint +
+                                 0.5 * length * Gauss::nodes[q];
+                const double weight = 0.5 * length * Gauss::weights[q];
+                const auto derivative_knots = [&](const int knot_index)
+                {
+                    return this->knots(knot_index + S);
+                };
+                basis::dersBasisFunsFixed<double, S - 1>(
+                    0, derivative_span, t, derivative_knots, low_degree_basis);
+
+                LocalVector value{};
+                for (int local_index = 0; local_index < S; ++local_index)
+                {
+                    for (int dimension = 0; dimension < Dim; ++dimension)
+                    {
+                        value[dimension] +=
+                            low_degree_basis[0][local_index] *
+                            derivative_history[S][local_index][dimension];
+                    }
+                }
+                double squared_norm = 0.0;
+                for (const double component : value)
+                {
+                    squared_norm += component * component;
+                }
+                cost += weight * squared_norm;
+
+                std::array<double, S> basis_adjoint{};
+                for (int local_index = 0; local_index < S; ++local_index)
+                {
+                    for (int dimension = 0; dimension < Dim; ++dimension)
+                    {
+                        const double value_adjoint =
+                            2.0 * weight * value[dimension];
+                        derivative_gradient[local_index][dimension] +=
+                            low_degree_basis[0][local_index] * value_adjoint;
+                        basis_adjoint[local_index] +=
+                            derivative_history[S][local_index][dimension] *
+                            value_adjoint;
+                    }
+                }
+
+                std::array<double, 2 * (S - 1)> basis_knot_adjoint{};
+                double t_adjoint = 0.0;
+                accumulateZeroOrderBasisKnotGradient<S - 1>(
+                    derivative_span, S, t, basis_adjoint, t_adjoint,
+                    basis_knot_adjoint);
+                const int basis_first_knot =
+                    S + derivative_span - (S - 1) + 1;
+                for (int local_index = 0;
+                     local_index < 2 * (S - 1);
+                     ++local_index)
+                {
+                    add_knot_adjoint(basis_first_knot + local_index,
+                                     basis_knot_adjoint[local_index]);
+                }
+
+                // t = ((1-xi)/2) t_start + ((1+xi)/2) t_end, while
+                // weight = (t_end-t_start) * gauss_weight / 2.
+                add_knot_adjoint(
+                    span, t_adjoint * 0.5 * (1.0 - Gauss::nodes[q]) -
+                              0.5 * Gauss::weights[q] * squared_norm);
+                add_knot_adjoint(
+                    span + 1, t_adjoint * 0.5 * (1.0 + Gauss::nodes[q]) +
+                                      0.5 * Gauss::weights[q] * squared_norm);
+            }
+
+            // Apply H^T and simultaneously differentiate every local
+            // divided-difference scale with respect to its two knots.
+            for (int derivative = S; derivative >= 1; --derivative)
+            {
+                std::array<LocalVector, P + 1> previous_gradient{};
+                const int output_count = P + 1 - derivative;
+                for (int local_index = 0;
+                     local_index < output_count;
+                     ++local_index)
+                {
+                    const double scale =
+                        difference_scales[derivative - 1][local_index];
+                    const double denominator =
+                        difference_denominators[derivative - 1][local_index];
+                    double scale_adjoint = 0.0;
+                    for (int dimension = 0; dimension < Dim; ++dimension)
+                    {
+                        const double gradient =
+                            derivative_gradient[local_index][dimension];
+                        scale_adjoint += gradient *
+                            (derivative_history[derivative - 1][local_index + 1]
+                                                      [dimension] -
+                             derivative_history[derivative - 1][local_index]
+                                                      [dimension]);
+                        previous_gradient[local_index][dimension] -=
+                            scale * gradient;
+                        previous_gradient[local_index + 1][dimension] +=
+                            scale * gradient;
+                    }
+                    const double denominator_adjoint =
+                        -scale_adjoint * scale / denominator;
+                    add_knot_adjoint(
+                        first_control + local_index + P + 1,
+                        denominator_adjoint);
+                    add_knot_adjoint(first_control + local_index + derivative,
+                                     -denominator_adjoint);
+                }
+                derivative_gradient = previous_gradient;
+            }
+            for (int local_index = 0; local_index <= P; ++local_index)
+            {
+                for (int dimension = 0; dimension < Dim; ++dimension)
+                {
+                    gdC(first_control + local_index, dimension) +=
+                        derivative_gradient[local_index][dimension];
+                }
+            }
+
+            for (int duration = duration_range.first;
+                 duration <= duration_range.last;
+                 ++duration)
+            {
+                const int first_shifted_knot = P + 1 + duration;
+                double duration_adjoint = 0.0;
+                for (int local_index = 0; local_index < 2 * P + 1;
+                     ++local_index)
+                {
+                    if (first_knot + local_index >= first_shifted_knot)
+                    {
+                        duration_adjoint += knot_adjoint[local_index];
+                    }
+                }
+                gdT_direct(duration) += duration_adjoint;
+            }
+        }
+    }
+
+    // Exact reverse of Algorithm A2.2 for a zero-order basis row evaluated at
+    // an interior waypoint knot.  Waypoint rows are the O(M) part of A(T).
+    // Keeping this reverse scalar avoids carrying a LocalTimingJet through
+    // every recurrence operation while still returning the whole local knot
+    // stencil derivative of lambda_row^T A_row(T) C.
+    inline void accumulateWaypointRowTimeGradient(
+        const FixedConstraintRowInfo &info,
+        const Eigen::MatrixXd &adjoint,
+        const int row,
+        Eigen::VectorXd &gradByTimes) const
+    {
+        const int span = info.span;
+        const int first_knot = span - P + 1;
+        const timing::IndexRange duration_range =
+            affectedDurationRangeForKnotWindowFixed(first_knot, span + P);
+
+        std::array<double, P + 1> basis_adjoint{};
+        for (int local_index = 0; local_index <= P; ++local_index)
+        {
+            basis_adjoint[local_index] = adjoint.row(row).dot(
+                this->control_points.row(info.first_col + local_index));
+        }
+        std::array<double, 2 * P> knot_adjoint{};
+        double evaluation_time_adjoint = 0.0;
+        accumulateZeroOrderBasisKnotGradient<P>(
+            span, 0, this->knots(span), basis_adjoint,
+            evaluation_time_adjoint, knot_adjoint);
+        knot_adjoint[span - first_knot] += evaluation_time_adjoint;
+
+        for (int duration = duration_range.first;
+             duration <= duration_range.last;
+             ++duration)
+        {
+            double projected_row_derivative = 0.0;
+            const int first_shifted_knot = P + 1 + duration;
+            for (int local_index = 0; local_index < 2 * P; ++local_index)
+            {
+                if (first_knot + local_index >= first_shifted_knot)
+                {
+                    projected_row_derivative += knot_adjoint[local_index];
+                }
+            }
+            gradByTimes(duration) -= projected_row_derivative;
+        }
+    }
+
+    // The construction correction has the same compact timing support as the
+    // energy.  Evaluate each constraint row once and scatter its local jet
+    // instead of repeating the same row for every affected duration.
+    inline void propagateEnergyGradLocalADFused(
+        const Eigen::MatrixXd &gdC,
+        const Eigen::VectorXd &gdT_direct,
+        Eigen::MatrixXd &gradByPoints,
+        Eigen::VectorXd &gradByTimes) const
+    {
+        const int M = static_cast<int>(this->durations_.size());
+        gradByPoints.resize(std::max(0, M - 1), Dim);
+        gradByTimes = gdT_direct;
+
+        Eigen::MatrixXd adjoint = gdC;
+        this->A.solveAdj(adjoint);
+        for (int i = 0; i < M - 1; ++i)
+        {
+            gradByPoints.row(i) = adjoint.row(S + i);
+        }
+
+        std::array<std::array<LocalTimingJet, P + 1>, P + 1> ders{};
+        for (int row = 0; row < this->N_c; ++row)
+        {
+            const FixedConstraintRowInfo info = constraintRowInfoFixed(row);
+            const int first_knot =
+                std::min(info.eval_knot, info.span - P + 1);
+            const int last_knot =
+                std::max(info.eval_knot, info.span + P);
+            const timing::IndexRange duration_range =
+                affectedDurationRangeForKnotWindowFixed(first_knot, last_knot);
+            if (duration_range.empty())
+            {
+                continue;
+            }
+            const int duration_count =
+                duration_range.last - duration_range.first + 1;
+            const FixedLocalTimingKnotView local_knots{
+                this->knots, duration_range.first, duration_count};
+            basis::dersBasisFunsFixed<LocalTimingJet, P>(
+                info.derivative, info.span, local_knots(info.eval_knot),
+                local_knots, ders);
+
+            LocalTimingJet projected_row;
+            for (int j = 0; j <= P; ++j)
+            {
+                projected_row += ders[info.derivative][j] *
+                                 adjoint.row(row).dot(
+                                     this->control_points.row(info.first_col + j));
+            }
+            for (int lane = 0; lane < duration_count; ++lane)
+            {
+                gradByTimes(duration_range.first + lane) -=
+                    projected_row.derivative[lane];
+            }
+        }
+    }
+
+    // Reverse-mode construction correction.  This is the exact local
+    // derivative of lambda^T A(T) C, evaluated once per row instead of once
+    // per duration direction.
+    inline void propagateEnergyGradLocalADReverse(
+        const Eigen::MatrixXd &gdC,
+        const Eigen::VectorXd &gdT_direct,
+        Eigen::MatrixXd &gradByPoints,
+        Eigen::VectorXd &gradByTimes) const
+    {
+        const int M = static_cast<int>(this->durations_.size());
+        gradByPoints.resize(std::max(0, M - 1), Dim);
+        gradByTimes = gdT_direct;
+
+        Eigen::MatrixXd adjoint = gdC;
+        this->A.solveAdj(adjoint);
+        for (int i = 0; i < M - 1; ++i)
+        {
+            gradByPoints.row(i) = adjoint.row(S + i);
+        }
+
+        ad::ReverseTape tape(4096);
+        std::array<std::array<ad::Reverse, P + 1>, P + 1> ders{};
+        for (int row = 0; row < this->N_c; ++row)
+        {
+            const FixedConstraintRowInfo info = constraintRowInfoFixed(row);
+            const int first_knot =
+                std::min(info.eval_knot, info.span - P + 1);
+            const int last_knot =
+                std::max(info.eval_knot, info.span + P);
+            const timing::IndexRange duration_range =
+                affectedDurationRangeForKnotWindowFixed(first_knot, last_knot);
+            if (duration_range.empty())
+            {
+                continue;
+            }
+
+            tape.reset();
+            const int duration_count =
+                duration_range.last - duration_range.first + 1;
+            const FixedLocalReverseKnotView local_knots{
+                tape, this->knots, first_knot, duration_range.first,
+                duration_count};
+            basis::dersBasisFunsFixed<ad::Reverse, P>(
+                info.derivative, info.span, local_knots(info.eval_knot),
+                local_knots, ders);
+
+            ad::Reverse projected_row;
+            for (int j = 0; j <= P; ++j)
+            {
+                projected_row += ders[info.derivative][j] *
+                                 adjoint.row(row).dot(
+                                     this->control_points.row(info.first_col + j));
+            }
+            tape.backward(projected_row);
+            for (int lane = 0; lane < duration_count; ++lane)
+            {
+                gradByTimes(duration_range.first + lane) -=
+                    local_knots.gradient(lane);
+            }
+        }
+    }
+
+    // Hybrid analytic propagation: interior interpolation rows use the
+    // scalar basis reverse above; the O(S) endpoint derivative rows retain
+    // the existing LocalTimingJet implementation.
+    inline void propagateEnergyGradDerivativeControl(
+        const Eigen::MatrixXd &gdC,
+        const Eigen::VectorXd &gdT_direct,
+        Eigen::MatrixXd &gradByPoints,
+        Eigen::VectorXd &gradByTimes) const
+    {
+        const int M = static_cast<int>(this->durations_.size());
+        gradByPoints.resize(std::max(0, M - 1), Dim);
+        gradByTimes = gdT_direct;
+
+        Eigen::MatrixXd adjoint = gdC;
+        this->A.solveAdj(adjoint);
+        for (int i = 0; i < M - 1; ++i)
+        {
+            gradByPoints.row(i) = adjoint.row(S + i);
+        }
+
+        const int tail_start = S + M - 1;
+        std::array<std::array<LocalTimingJet, P + 1>, P + 1> ders{};
+        for (int row = 0; row < this->N_c; ++row)
+        {
+            const FixedConstraintRowInfo info = constraintRowInfoFixed(row);
+            if (row >= S && row < tail_start)
+            {
+                accumulateWaypointRowTimeGradient(info, adjoint, row,
+                                                   gradByTimes);
+                continue;
+            }
+
+            const int first_knot =
+                std::min(info.eval_knot, info.span - P + 1);
+            const int last_knot =
+                std::max(info.eval_knot, info.span + P);
+            const timing::IndexRange duration_range =
+                affectedDurationRangeForKnotWindowFixed(first_knot, last_knot);
+            if (duration_range.empty())
+            {
+                continue;
+            }
+            const int duration_count =
+                duration_range.last - duration_range.first + 1;
+            const FixedLocalTimingKnotView local_knots{
+                this->knots, duration_range.first, duration_count};
+            basis::dersBasisFunsFixed<LocalTimingJet, P>(
+                info.derivative, info.span, local_knots(info.eval_knot),
+                local_knots, ders);
+
+            LocalTimingJet projected_row;
+            for (int j = 0; j <= P; ++j)
+            {
+                projected_row += ders[info.derivative][j] *
+                                 adjoint.row(row).dot(
+                                     this->control_points.row(info.first_col + j));
+            }
+            for (int lane = 0; lane < duration_count; ++lane)
+            {
+                gradByTimes(duration_range.first + lane) -=
+                    projected_row.derivative[lane];
+            }
+        }
+    }
+
 public:
     static constexpr int SystemOrder = S;
     static constexpr int Degree = P;
@@ -2298,7 +3504,7 @@ public:
 
     inline double getEnergy() const
     {
-        return getEnergyForKnots(this->knots);
+        return getEnergyExact();
     }
 
     inline void getEnergyPartialGradByCoeffs(double &cost,
@@ -2723,6 +3929,43 @@ public:
         Eigen::VectorXd gdT_direct;
         getEnergyPartialGradByTimesAnalytic(gdT_direct);
         propagateGradAnalytic(gdC, gdT_direct, gradByPoints, gradByTimes);
+    }
+
+    // Fixed-order production API. It uses the exact derivative-control energy
+    // kernel with local time sensitivities, hiding the generic parent
+    // implementation whose scalar Dual loop revisits a span per duration.
+    inline void getEnergyPartialGradByTimesLocalAD(
+        Eigen::VectorXd &gdT_direct) const
+    {
+        double ignored_cost = 0.0;
+        Eigen::MatrixXd ignored_gdC;
+        getEnergyPartialGradDerivativeControl(ignored_cost, ignored_gdC,
+                                              gdT_direct);
+    }
+
+    inline void getEnergyPartialGradLocalAD(double &cost,
+                                            Eigen::MatrixXd &gdC,
+                                            Eigen::VectorXd &gdT_direct) const
+    {
+        getEnergyPartialGradDerivativeControl(cost, gdC, gdT_direct);
+    }
+
+    inline void getEnergyAndLocalADGrad(double &cost,
+                                        Eigen::MatrixXd &gradByPoints,
+                                        Eigen::VectorXd &gradByTimes) const
+    {
+        Eigen::MatrixXd gdC;
+        Eigen::VectorXd gdT_direct;
+        getEnergyPartialGradDerivativeControl(cost, gdC, gdT_direct);
+        propagateEnergyGradDerivativeControl(gdC, gdT_direct,
+                                              gradByPoints, gradByTimes);
+    }
+
+    inline void getEnergyAndGrad(double &cost,
+                                 Eigen::MatrixXd &gradByPoints,
+                                 Eigen::VectorXd &gradByTimes) const
+    {
+        getEnergyAndLocalADGrad(cost, gradByPoints, gradByTimes);
     }
 
     inline void getEnergyAndFiniteDiffGrad(double &cost,

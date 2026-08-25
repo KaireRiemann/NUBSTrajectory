@@ -25,5 +25,10 @@ mkdir -p "${results_dir}"
   "${results_dir}/nonuniform_robustness.csv"
 python3 scripts/plot_nonuniform_robustness.py \
   "${results_dir}/nonuniform_robustness.csv" "${results_dir}/figures"
+./bin/bench_gradient_propagation "${runs}" \
+  "${results_dir}/gradient_propagation_benchmark.csv"
+python3 scripts/plot_gradient_propagation_speed.py \
+  "${results_dir}/gradient_propagation_benchmark.csv" \
+  "${results_dir}/gradient_propagation_speed.svg"
 
 echo "Validation outputs: ${results_dir}"
